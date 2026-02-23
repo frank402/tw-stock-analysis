@@ -957,7 +957,10 @@
       <span id="marketStatusText">載入中...</span>
     </div>
     <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);" id="currentTime"></div>
-    <button class="api-key-btn" onclick="openApiModal()">🔑 設定 API Key</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="apiUsageCounter" style="font-size:11px;color:var(--text-dim);cursor:pointer;" onclick="openApiModal()"></span>
+      <button class="api-key-btn" onclick="openApiModal()">⚙️ 設定</button>
+    </div>
   </div>
 </header>
 
@@ -1011,11 +1014,12 @@
 
   <div class="grid-left-wide mb-4">
     <!-- SECTOR HEATMAP -->
-    <div class="card">
+    <div class="card" id="overviewHeatmap">
       <div class="card-header">
         <div class="card-title"><span class="icon">🗺️</span> 類股熱力圖</div>
         <div class="flex gap-2">
           <span class="text-xs text-dim">今日漲跌</span>
+          <button class="btn-outline" style="font-size:11px;padding:3px 10px;" onclick="const p=document.getElementById('dashCustomPanel');p.style.display=p.style.display==='none'?'block':'none'">⚙️ 自訂</button>
         </div>
       </div>
       <div class="heatmap-grid" id="heatmapGrid"></div>
@@ -1059,7 +1063,7 @@
 
   <div class="grid-2">
     <!-- Top Movers -->
-    <div class="card">
+    <div class="card" id="overviewMovers">
       <div class="section-header">
         <div class="section-title">漲幅榜</div>
         <div class="filter-bar" style="margin-bottom:0;">
@@ -1082,7 +1086,7 @@
     </div>
 
     <!-- Sector Performance -->
-    <div class="card">
+    <div class="card" id="overviewSectors">
       <div class="section-header">
         <div class="section-title">類股表現</div>
       </div>
@@ -1100,8 +1104,13 @@
           <div class="section-title">⭐ 自選股清單</div>
         </div>
         <div class="add-stock-bar">
-          <input type="text" id="watchlistInput" placeholder="輸入股票代碼或名稱，如：2330 或 台積電" onkeydown="if(event.key==='Enter')addToWatchlist()">
-          <button class="btn" onclick="addToWatchlist()">新增</button>
+          <div style="display:flex;gap:6px;width:100%;">
+            <input type="text" id="watchlistInput" placeholder="代碼，多筆逗號分隔：2330,2317,2454" 
+              onkeydown="if(event.key==='Enter')addToWatchlist()" style="flex:1;">
+            <button class="btn" onclick="addToWatchlist()">新增</button>
+            <button class="btn-outline" onclick="openBulkWatchlistModal()" title="批量輸入">📋</button>
+          </div>
+          <button class="btn-outline" onclick="openBulkWatchlistModal()" style="white-space:nowrap;">批量+</button>
         </div>
         <table class="stock-table">
           <thead>
@@ -1539,7 +1548,7 @@
   <div class="grid-left-wide">
     <div class="card">
       <div class="section-title" style="margin-bottom:16px;">💬 AI 股市分析助理</div>
-      <div class="notice-bar">需設定 Claude API Key 才能使用完整 AI 對話功能</div>
+      <div class="notice-bar" id="chatNoticeBar">💡 AI 問答透過 Cloudflare Worker 轉發，無需在瀏覽器設定 API Key。<span id="aiUsageBadge" style="float:right;font-size:11px;background:rgba(0,212,255,.15);padding:2px 8px;border-radius:10px;cursor:pointer;" onclick="showAiUsage()">📊 用量 0次</span></div>
       <div class="chat-container" id="chatContainer">
         <div class="chat-msg ai">
           👋 您好！我是台股 AI 分析助理。<br><br>
@@ -1575,10 +1584,16 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-title" style="margin-bottom:14px;"><span class="icon">🔑</span> API 設定</div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">設定 Claude API Key 以啟用 AI 分析功能</div>
-        <button class="btn" style="width:100%;" onclick="openApiModal()">設定 API Key</button>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:10px;">API Key 僅儲存於您的瀏覽器，不會上傳伺服器</div>
+        <div class="card-title" style="margin-bottom:14px;"><span class="icon">🔒</span> API 設定說明</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7;margin-bottom:12px;">
+          Claude API Key 存放於 Cloudflare Worker Secret，不需在瀏覽器設定。<br>
+          只需設定 Worker 網址即可使用所有 AI 功能。
+        </div>
+        <button class="btn" style="width:100%;" onclick="openApiModal()">⚙️ 設定 Worker 網址</button>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">📊 今日 AI 使用量</div>
+          <div id="aiUsageDetail" style="font-size:12px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1875,8 +1890,12 @@
     <div style="font-size:12px;color:var(--accent);margin-bottom:6px;font-weight:500;">
       ☁️ Cloudflare Worker 網址（所有功能的中繼站）
     </div>
-    <input type="text" id="workerUrlInput" placeholder="https://twstock-proxy.yourname.workers.dev"
-      style="font-family:'Space Mono',monospace;font-size:12px;">
+    <div style="position:relative;">
+      <input type="password" id="workerUrlInput" placeholder="https://twstock-proxy.yourname.workers.dev"
+        style="font-family:'Space Mono',monospace;font-size:11px;padding-right:40px;">
+      <button onclick="toggleWorkerVis()" id="workerVisBtn"
+        style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;">👁</button>
+    </div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">
       未設定時仍可使用台股基本功能（退回備援 proxy）
     </div>
@@ -1892,14 +1911,47 @@
 
 <!-- ADD HOLDING MODAL -->
 <div class="modal-overlay" id="holdingModal">
-  <div class="modal">
+  <div class="modal" style="max-width:480px;width:95%;">
     <div class="modal-title">+ 新增持股</div>
-    <input type="text" id="holdingCode" placeholder="股票代碼，如：2330">
-    <input type="number" id="holdingLots" placeholder="股數（例：1000）">
-    <input type="number" id="holdingCost" placeholder="平均成本 (元)">
+    <div id="holdingModeSwitch" style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="filter-chip active" id="holdingSingle" onclick="switchHoldingMode('single')">單筆</button>
+      <button class="filter-chip" id="holdingBulk" onclick="switchHoldingMode('bulk')">批量輸入</button>
+    </div>
+
+    <!-- 單筆 -->
+    <div id="holdingSingleForm">
+      <input type="text" id="holdingCode" placeholder="股票代碼，如：2330">
+      <input type="number" id="holdingLots" placeholder="股數（例：1000）">
+      <input type="number" id="holdingCost" placeholder="平均成本 (元)">
+    </div>
+
+    <!-- 批量 -->
+    <div id="holdingBulkForm" style="display:none;">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">每行一筆，格式：代碼 股數 成本</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">例：<br>2330 1000 950<br>2317 2000 145<br>2454 500 1200</div>
+      <textarea id="holdingBulkInput" placeholder="2330 1000 950&#10;2317 2000 145&#10;2454 500 1200"
+        style="width:100%;height:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+        padding:10px;border-radius:8px;font-size:13px;font-family:'Space Mono',monospace;resize:vertical;outline:none;"></textarea>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeHoldingModal()">取消</button>
       <button class="btn" onclick="addHolding()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量自選股 Modal -->
+<div class="modal-overlay" id="bulkWatchlistModal">
+  <div class="modal" style="max-width:440px;width:95%;">
+    <div class="modal-title">⭐ 批量新增自選股</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">每行一個股票代碼，或用逗號分隔</div>
+    <textarea id="bulkWatchlistInput" placeholder="2330&#10;2317&#10;2454&#10;2382&#10;2412"
+      style="width:100%;height:160px;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+      padding:10px;border-radius:8px;font-size:14px;font-family:'Space Mono',monospace;resize:vertical;outline:none;"></textarea>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="document.getElementById('bulkWatchlistModal').classList.remove('open')">取消</button>
+      <button class="btn" onclick="addBulkWatchlist()">新增全部</button>
     </div>
   </div>
 </div>
@@ -1912,10 +1964,12 @@ const state = {
   // apiKey 已移至 Worker Secret，不再存於瀏覽器
   watchlist: JSON.parse(localStorage.getItem('watchlist') || '["2330","2317","2454","2382","2412"]'),
   portfolio: JSON.parse(localStorage.getItem('portfolio') || '[]'),
-  stockCache: {},       // { code: { name, price, change, changePct, volume, ... } }
-  twseIndex: null,      // 大盤即時資料
-  yahooData: {},        // Yahoo Finance 資料（美股、匯率、商品）
-  rssNews: [],          // RSS 新聞
+  stockCache: {},
+  twseIndex: null,
+  yahooData: {},
+  rssNews: [],
+  // API 使用量追蹤
+  apiUsage: JSON.parse(localStorage.getItem('apiUsage') || '{"date":"","calls":0,"estTokens":0}'),
   lastFetch: 0,
   isMarketOpen: false,
 };
@@ -2113,27 +2167,59 @@ async function fetchYahooData() {
     showMacroNote('💡 設定 Cloudflare Worker 後可自動載入美股、匯率、商品即時資料');
     return;
   }
-  try {
-    const res  = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(YAHOO_SYMBOLS)}`,
-      { signal: AbortSignal.timeout(12000) });
+  // 先試 Worker（帶多重備援），失敗則降級到 allorigins proxy
+  const tryWorker = async () => {
+    const res = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(YAHOO_SYMBOLS)}`,
+      { signal: AbortSignal.timeout(15000) });
     if (!res.ok) throw new Error(`Worker 回應 ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    state.yahooData = data.result || {};
-    if (Object.keys(state.yahooData).length === 0) throw new Error('No quote data returned');
+    if (!data.result || Object.keys(data.result).length === 0) throw new Error('empty result');
+    return data.result;
+  };
+
+  // 備援：直接從 allorigins 取 Yahoo v7（無 Worker）
+  const tryFallback = async () => {
+    const sym = encodeURIComponent('^GSPC,^IXIC,USDTWD=X,^SOX,^VIX,^TNX,GC=F,CL=F');
+    const url  = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}`;
+    const res  = await fetch(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(12000) }
+    );
+    const outer = await res.json();
+    const data  = JSON.parse(outer.contents || '{}');
+    const result = {};
+    (data.quoteResponse?.result || []).forEach(q => {
+      result[q.symbol] = {
+        name: q.shortName || q.symbol,
+        price: +(q.regularMarketPrice||0).toFixed(2),
+        change: +(q.regularMarketChange||0).toFixed(2),
+        changePct: +(q.regularMarketChangePercent||0).toFixed(2),
+        prev: +(q.regularMarketPreviousClose||0).toFixed(2),
+      };
+    });
+    if (Object.keys(result).length === 0) throw new Error('fallback empty');
+    return result;
+  };
+
+  try {
+    let result;
+    try { result = await tryWorker(); }
+    catch(e1) {
+      console.warn('Worker Yahoo failed, trying fallback:', e1.message);
+      result = await tryFallback();
+    }
+    state.yahooData = result;
     updateMacroCards();
     updateOverviewCards();
-    // 隱藏「見附註」文字
-    document.getElementById('sp500-price').style.fontSize  = '';
-    document.getElementById('usdtwd-price').style.fontSize = '';
   } catch(e) {
-    console.warn('Yahoo fetch failed:', e.message);
-    // 讓使用者看到具體錯誤而非只是空白
-    const errMsg = `⚠️ 美股資料暫時無法載入（${e.message}）`;
-    document.getElementById('sp500-change').innerHTML  = `<span style="font-size:11px;color:var(--gold);">${errMsg}</span>`;
-    document.getElementById('usdtwd-change').innerHTML = `<span style="font-size:11px;color:var(--gold);">請稍後重試或重整頁面</span>`;
-    document.getElementById('sp500-price').textContent  = '--';
-    document.getElementById('usdtwd-price').textContent = '--';
+    console.warn('All Yahoo sources failed:', e.message);
+    document.getElementById('sp500-price').textContent  = '---';
+    document.getElementById('usdtwd-price').textContent = '--.-';
+    document.getElementById('sp500-change').innerHTML   =
+      `<span style="font-size:10px;color:var(--gold);">⚠️ 無法載入（${e.message.slice(0,30)}）</span>`;
+    document.getElementById('usdtwd-change').innerHTML  =
+      `<span style="font-size:10px;color:var(--gold);">請確認 Worker 設定</span>`;
   }
 }
 
@@ -2364,17 +2450,18 @@ function renderTicker() {
 // OVERVIEW
 // ============================================================
 function renderOverview() {
-  // 大盤
   updateIndexCard();
-
-  // S&P500、USD/TWD 目前無免費即時 API，顯示提示
-  document.getElementById('sp500-price').textContent = '見附註';
-  document.getElementById('sp500-change').innerHTML = '<span class="text-dim" style="font-size:12px;">需另設 API</span>';
-  renderSparkline('sp500-spark', randomWalkData(20, 5700, 5900), true);
-  document.getElementById('usdtwd-price').textContent = '見附註';
-  document.getElementById('usdtwd-change').innerHTML = '<span class="text-dim" style="font-size:12px;">需另設 API</span>';
-  renderSparkline('usdtwd-spark', randomWalkData(20, 31.8, 32.4), false);
-
+  // 若 Yahoo 資料已載入就直接顯示，否則才顯示佔位符
+  if (Object.keys(state.yahooData).length > 0) {
+    updateOverviewCards();
+  } else {
+    document.getElementById('sp500-price').textContent = '--';
+    document.getElementById('sp500-change').innerHTML  = '<span class="text-dim" style="font-size:12px;">載入中…</span>';
+    renderSparkline('sp500-spark', randomWalkData(20, 5700, 5900), true);
+    document.getElementById('usdtwd-price').textContent = '--';
+    document.getElementById('usdtwd-change').innerHTML  = '<span class="text-dim" style="font-size:12px;">載入中…</span>';
+    renderSparkline('usdtwd-spark', randomWalkData(20, 31.8, 32.4), false);
+  }
   renderHeatmap();
   animateSentiment(62);
   renderMovers('gain');
@@ -2556,16 +2643,49 @@ function getSimpleRec(s) {
 
 async function addToWatchlist() {
   const input = document.getElementById('watchlistInput');
-  const code  = input.value.trim().replace(/\D/g,''); // 只取數字
-  if (!code) return;
-  if (state.watchlist.includes(code)) { alert('已在自選股清單中'); return; }
-  state.watchlist.push(code);
+  const raw   = input.value.trim();
+  if (!raw) return;
+  // 支援逗號或換行分隔多個代碼
+  const codes = raw.split(/[,，\n\r\s]+/).map(s=>s.trim().replace(/\D/g,'')).filter(Boolean);
+  const added = [];
+  for (const code of codes) {
+    if (!code || state.watchlist.includes(code)) continue;
+    state.watchlist.push(code);
+    added.push(code);
+  }
+  if (!added.length) { alert('代碼已存在或格式錯誤'); return; }
   localStorage.setItem('watchlist', JSON.stringify(state.watchlist));
   input.value = '';
   renderWatchlistSkeleton();
-  await fetchStockPrices([code]);
+  await fetchStockPrices(added);
   renderWatchlist();
   renderTicker();
+  if (added.length > 1) showToast(`✅ 已新增 ${added.length} 支：${added.join(', ')}`);
+}
+
+function openBulkWatchlistModal() {
+  document.getElementById('bulkWatchlistModal').classList.add('open');
+}
+
+async function addBulkWatchlist() {
+  const raw = document.getElementById('bulkWatchlistInput').value.trim();
+  if (!raw) return;
+  const codes = raw.split(/[,，\n\r\s]+/).map(s=>s.trim().replace(/\D/g,'')).filter(Boolean);
+  const added = [];
+  for (const code of codes) {
+    if (!code || state.watchlist.includes(code)) continue;
+    state.watchlist.push(code);
+    added.push(code);
+  }
+  document.getElementById('bulkWatchlistModal').classList.remove('open');
+  document.getElementById('bulkWatchlistInput').value = '';
+  if (!added.length) { showToast('⚠️ 無新代碼可新增'); return; }
+  localStorage.setItem('watchlist', JSON.stringify(state.watchlist));
+  renderWatchlistSkeleton();
+  await fetchStockPrices(added);
+  renderWatchlist();
+  renderTicker();
+  showToast(`✅ 批量新增 ${added.length} 支：${added.slice(0,5).join(', ')}${added.length>5?'…':''}`);
 }
 
 function removeFromWatchlist(code) {
@@ -2669,15 +2789,56 @@ function openAddHolding(code) {
   document.getElementById('holdingModal').classList.add('open');
 }
 function closeHoldingModal() { document.getElementById('holdingModal').classList.remove('open'); }
+function switchHoldingMode(mode) {
+  document.getElementById('holdingSingleForm').style.display = mode==='single' ? '' : 'none';
+  document.getElementById('holdingBulkForm').style.display   = mode==='bulk'   ? '' : 'none';
+  document.getElementById('holdingSingle').classList.toggle('active', mode==='single');
+  document.getElementById('holdingBulk').classList.toggle('active', mode==='bulk');
+}
+
 function addHolding() {
-  const code = document.getElementById('holdingCode').value.trim();
-  const lots = parseFloat(document.getElementById('holdingLots').value);  // 直接股數
-  const cost = parseFloat(document.getElementById('holdingCost').value);
-  if (!code || !lots || !cost) { alert('請填寫完整資訊'); return; }
-  state.portfolio.push({ code, lots, cost });
-  localStorage.setItem('portfolio', JSON.stringify(state.portfolio));
-  closeHoldingModal();
-  renderPortfolio();
+  // 判斷目前模式
+  const bulkVisible = document.getElementById('holdingBulkForm').style.display !== 'none';
+  if (bulkVisible) {
+    // 批量模式
+    const raw   = document.getElementById('holdingBulkInput').value.trim();
+    const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+    const added = [];
+    const errors= [];
+    for (const line of lines) {
+      const parts = line.split(/[\s,，]+/);
+      const code  = parts[0]?.replace(/\D/g,'');
+      const lots  = parseFloat(parts[1]);
+      const cost  = parseFloat(parts[2]);
+      if (!code || !lots || !cost) { errors.push(line); continue; }
+      // 若已有相同代碼就更新
+      const existing = state.portfolio.findIndex(h=>h.code===code);
+      if (existing>=0) state.portfolio[existing] = { code, lots, cost };
+      else state.portfolio.push({ code, lots, cost });
+      added.push(code);
+    }
+    localStorage.setItem('portfolio', JSON.stringify(state.portfolio));
+    closeHoldingModal();
+    renderPortfolio();
+    if (errors.length) showToast(`⚠️ 新增 ${added.length} 筆，${errors.length} 筆格式錯誤`);
+    else showToast(`✅ 成功新增 ${added.length} 筆持股`);
+  } else {
+    // 單筆模式
+    const code = document.getElementById('holdingCode').value.trim();
+    const lots = parseFloat(document.getElementById('holdingLots').value);
+    const cost = parseFloat(document.getElementById('holdingCost').value);
+    if (!code || !lots || !cost) { alert('請填寫完整資訊'); return; }
+    const existing = state.portfolio.findIndex(h=>h.code===code);
+    if (existing>=0) {
+      if (!confirm(`${code} 已在持股中，要覆蓋嗎？`)) return;
+      state.portfolio[existing] = { code, lots, cost };
+    } else {
+      state.portfolio.push({ code, lots, cost });
+    }
+    localStorage.setItem('portfolio', JSON.stringify(state.portfolio));
+    closeHoldingModal();
+    renderPortfolio();
+  }
 }
 function removeHolding(code) {
   state.portfolio = state.portfolio.filter(h => h.code !== code);
@@ -2821,6 +2982,7 @@ ${stockData.map(s => `${s.code} ${s.name}: 現價${s.price} 漲跌${s.changePct>
   "summary": "本次分析的整體市場觀點，50字以內"
 }`;
 
+    trackApiUsage('ai-recs', 1500);
     const raw  = await callClaude([{ role:'user', content: prompt }], 1500);
     const json = raw.match(/\{[\s\S]*\}/)?.[0];
     if (!json) throw new Error('AI 回應格式異常');
@@ -2828,6 +2990,7 @@ ${stockData.map(s => `${s.code} ${s.name}: 現價${s.price} 漲跌${s.changePct>
 
     AI_RECS = result.recs || [];
     document.getElementById('aiCount').textContent = AI_RECS.length;
+    trackAiUsage('recs');
     document.getElementById('aiSummaryPanel').innerHTML =
       `<div style="color:var(--text);line-height:1.7;">${result.summary || ''}</div>
        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
@@ -3056,6 +3219,38 @@ function renderCalendar() {
   renderEvents(macroEvents, 'macroCalendar');
 }
 
+
+// ============================================================
+// SCREENER — applyPreset（快速篩選）
+// ============================================================
+function applyPreset(type) {
+  resetScreener(false); // 不清除結果，只清欄位
+  const presets = {
+    high_div  : () => { setVal('sc-yield-min', 5); },
+    low_pe    : () => { setVal('sc-pe-max', 12); },
+    ai        : () => { setVal('sc-sector', 'AI伺服器'); },
+    semicon   : () => { setVal('sc-sector', '半導體'); },
+    finance   : () => { setVal('sc-sector', '金融保險'); },
+    up_today  : () => { setVal('sc-dir', 'up'); },
+    down_today: () => { setVal('sc-dir', 'down'); },
+    high_vol  : () => { setVal('sc-dir', 'strong'); },
+  };
+  const fn = presets[type];
+  if (!fn) return;
+  fn();
+  // 高亮目前使用的快速篩選
+  document.querySelectorAll('#page-screener .filter-bar .filter-chip').forEach(b => {
+    b.classList.remove('active');
+    if (b.getAttribute('onclick')?.includes(type)) b.classList.add('active');
+  });
+  runScreener();
+}
+
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
 // ============================================================
 // SCREENER
 // ============================================================
@@ -3143,11 +3338,21 @@ function runScreener() {
     });
 
     if (!filtered.length) {
+      // 診斷原因
+      let reason = '請調整篩選條件後再試';
+      const total = Object.keys(pool).length;
+      const allZero = Object.values(pool).every(s=>s.changePct===0 && s.price===0);
+      if (allZero) reason = '市場資料尚未載入（若在非交易時段，漲跌幅資料為 0，今日漲跌篩選無效）';
+      else if (sectorFilter) reason = `類股「${sectorFilter}」目前資料不足，請等資料載入後再試`;
       document.getElementById('screenerResults').innerHTML =
         `<div style="text-align:center;padding:40px;color:var(--text-dim);">
           <div style="font-size:24px;margin-bottom:12px;">🔍</div>
-          <div>沒有符合條件的股票</div>
-          <div style="font-size:12px;margin-top:6px;">請調整篩選條件後再試${sectorFilter ? `（類股：${sectorFilter}）` : ''}</div>
+          <div style="font-size:14px;margin-bottom:6px;">沒有符合條件的股票</div>
+          <div style="font-size:12px;max-width:300px;margin:0 auto;line-height:1.7;">${reason}</div>
+          <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+            <button class="btn-outline" onclick="resetScreener()">清除條件</button>
+            <button class="btn-outline" onclick="loadAllData().then(runScreener)">重新載入資料</button>
+          </div>
         </div>`;
       return;
     }
@@ -3192,13 +3397,15 @@ function runScreener() {
   }, 300);
 }
 
-function resetScreener() {
+function resetScreener(showEmpty=true) {
   ['sc-sector','sc-dir'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   ['sc-pe-min','sc-pe-max','sc-yield-min','sc-yield-max',
    'sc-chg-min','sc-chg-max','sc-price-min','sc-price-max'].forEach(id => {
     const el=document.getElementById(id); if(el) el.value='';
   });
-  document.getElementById('screenerResults').innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:30px;">設定條件後點選「開始篩選」</div>';
+  document.querySelectorAll('#page-screener .filter-bar .filter-chip').forEach(b=>b.classList.remove('active'));
+  if (showEmpty) document.getElementById('screenerResults').innerHTML =
+    '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:30px;">設定條件後點選「開始篩選」</div>';
 }
 
 // ============================================================
@@ -3227,14 +3434,11 @@ function quickChat(msg) {
 }
 
 function switchTabById(id) {
+  // 避免雙重 click 導致競爭條件
+  const tabs = ['overview','watchlist','portfolio','ai-analysis','news','macro','calendar','screener','chat','institutional','potential','trend'];
+  let found = false;
   document.querySelectorAll('.tab').forEach((t, i) => {
-    const tabs = ['overview','watchlist','portfolio','ai-analysis','news','macro','calendar','screener','chat','institutional','potential','trend'];
-    if (tabs[i] === id) { t.click(); }
-  });
-  document.querySelectorAll('.tab').forEach(t => {
-    if (t.textContent.includes('AI 問答') || t.textContent.includes('💬')) {
-      t.click();
-    }
+    if (!found && tabs[i] === id) { t.click(); found = true; }
   });
 }
 
@@ -3249,6 +3453,105 @@ function appendChat(msg, role, id) {
   return div;
 }
 
+
+// ============================================================
+// DASHBOARD CUSTOMIZATION
+// ============================================================
+const DASH_CONFIG_KEY = 'dashConfig';
+
+function toggleDashItem(id, cb) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = cb.checked ? '' : 'none';
+  const cfg = JSON.parse(localStorage.getItem(DASH_CONFIG_KEY) || '{}');
+  cfg[id] = cb.checked;
+  localStorage.setItem(DASH_CONFIG_KEY, JSON.stringify(cfg));
+}
+
+function loadDashConfig() {
+  const cfg = JSON.parse(localStorage.getItem(DASH_CONFIG_KEY) || '{}');
+  Object.entries(cfg).forEach(([id, visible]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = visible ? '' : 'none';
+    // 同步 checkbox
+    const cbId = {
+      overviewSP500:'dash-sp500', overviewUSDTWD:'dash-usdtwd',
+      overviewMovers:'dash-movers', overviewHeatmap:'dash-heatmap',
+      overviewSectors:'dash-sectors', overviewAlerts:'dash-alerts',
+    }[id];
+    if (cbId) {
+      const cb = document.getElementById(cbId);
+      if (cb) cb.checked = visible;
+    }
+  });
+}
+
+// ── API 使用量追蹤 ─────────────────────────────────────────────
+const API_BUDGET_TOKENS = 200000;   // 每日軟上限（約40 TWD）
+const API_WARN_PCT      = 0.7;      // 70% 時警告
+
+function trackApiUsage(type, estimatedTokens=1000) {
+  const today = new Date().toISOString().slice(0,10);
+  if (state.apiUsage.date !== today) {
+    state.apiUsage = { date: today, calls: 0, estTokens: 0 };
+  }
+  state.apiUsage.calls++;
+  state.apiUsage.estTokens += estimatedTokens;
+  localStorage.setItem('apiUsage', JSON.stringify(state.apiUsage));
+  updateApiCounter();
+  if (state.apiUsage.estTokens > API_BUDGET_TOKENS * API_WARN_PCT) {
+    showApiWarning();
+  }
+}
+
+function updateApiCounter() {
+  const el = document.getElementById('apiUsageCounter');
+  if (!el) return;
+  const pct  = Math.min(state.apiUsage.estTokens / API_BUDGET_TOKENS * 100, 100).toFixed(0);
+  const cost = (state.apiUsage.estTokens * 0.000003 * 32).toFixed(1); // 估算 TWD
+  el.innerHTML = `🤖 今日 ${state.apiUsage.calls} 次 · 約 ${cost} 元`;
+  el.style.color = state.apiUsage.estTokens > API_BUDGET_TOKENS * API_WARN_PCT
+    ? 'var(--gold)' : 'var(--text-dim)';
+}
+
+function showApiWarning() {
+  const existing = document.getElementById('apiWarningBanner');
+  if (existing) return; // 只顯示一次
+  const banner = document.createElement('div');
+  banner.id = 'apiWarningBanner';
+  banner.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;background:rgba(251,191,36,.12);' +
+    'border:1px solid rgba(251,191,36,.4);border-radius:10px;padding:12px 16px;font-size:12px;max-width:280px;' +
+    'box-shadow:0 4px 20px rgba(0,0,0,.3);';
+  banner.innerHTML = `<div style="font-weight:700;color:var(--gold);margin-bottom:4px;">⚠️ AI 用量提醒</div>
+    <div style="color:var(--text-dim);line-height:1.6;">今日 AI 呼叫已達預算 70%，<br>請留意使用量。</div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button onclick="document.getElementById('apiWarningBanner').remove()" 
+        style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+        padding:4px;border-radius:6px;cursor:pointer;font-size:11px;">知道了</button>
+      <button onclick="openApiModal()" 
+        style="flex:1;background:var(--gold);border:none;color:#000;
+        padding:4px;border-radius:6px;cursor:pointer;font-size:11px;">查看設定</button>
+    </div>`;
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 10000);
+}
+
+function showToast(msg, duration=3000) {
+  let toast = document.getElementById('toastMsg');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toastMsg';
+    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+      'background:var(--surface2);border:1px solid var(--border);border-radius:8px;' +
+      'padding:10px 20px;font-size:13px;z-index:9999;transition:opacity .3s;white-space:nowrap;' +
+      'box-shadow:0 4px 20px rgba(0,0,0,.3);';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
 // ── Claude 通用呼叫（走 Worker Proxy，Key 存在 Worker Secret）
 async function callClaude(messages, maxTokens=1200) {
   if (!WORKER_URL) throw new Error('請先設定 Cloudflare Worker 網址');
@@ -3260,7 +3563,7 @@ async function callClaude(messages, maxTokens=1200) {
       max_tokens: maxTokens,
       messages,
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(60000),
   });
   if (!res.ok) {
     const err = await res.json().catch(()=>({}));
@@ -3272,33 +3575,34 @@ async function callClaude(messages, maxTokens=1200) {
 }
 
 async function callClaudeAPI(userMsg) {
-  const systemPrompt = `你是一個專業的台灣股市分析師，精通：
-- 台灣股市技術分析（KD、RSI、MACD、布林通道）
-- 台灣上市公司財報分析
-- 美股對台股的影響分析
-- 關稅政策對台廠的影響
-- 總體經濟指標解讀
-- 外資籌碼分析
+  const idx = state.twseIndex || {};
+  const sp  = state.yahooData['^GSPC']    || {};
+  const twd = state.yahooData['USDTWD=X'] || {};
+  const vix = state.yahooData['^VIX']     || {};
 
-目前市場資料：
-- 台灣加權指數：21,583（+1.33%）
-- USD/TWD：32.18
-- VIX恐慌指數：16.8
-- 今日外資買超：132億元
+  const mkt = [
+    idx.changePct !== undefined ? `台股大盤 ${idx.changePct>=0?'+':''}${idx.changePct}%` : '',
+    sp.changePct  !== undefined ? `S&P500 ${sp.changePct>=0?'+':''}${sp.changePct}%` : '',
+    twd.price ? `USD/TWD ${twd.price.toFixed(2)}` : '',
+    vix.price ? `VIX ${vix.price}` : '',
+  ].filter(Boolean).join(' | ');
 
-請用繁體中文回覆，語言親切專業，每次分析要包含：量化指標、風險提示、操作建議。`;
+  const prompt = `你是台灣股市AI分析師，用繁體中文回答，300字以內，含量化指標+操作建議。
+市場環境：${mkt || '資料載入中'}
+問題：${userMsg}`;
 
+  trackApiUsage('chat', 800);
   try {
-    const reply = await callClaude([
-      { role: 'user', content: systemPrompt + '\n\n用戶問題：' + userMsg }
-    ], 1024);
+    const reply = await callClaude([{ role: 'user', content: prompt }], 800);
     const thinking = document.getElementById('thinking');
     if (thinking) thinking.remove();
     appendChat(reply.replace(/\n/g, '<br>'), 'ai');
+    // 更新 AI 使用計數
+    trackAiUsage('chat');
   } catch (err) {
     const thinking = document.getElementById('thinking');
     if (thinking) thinking.remove();
-    appendChat(`❌ 連線失敗：${err.message}。請確認 Worker 設定與 CLAUDE_API_KEY Secret。`, 'ai');
+    appendChat(`❌ 連線失敗：${err.message}`, 'ai');
   }
 }
 
@@ -4087,6 +4391,14 @@ function openApiModal() {
   document.getElementById('apiModal').classList.add('open');
 }
 function closeApiModal() { document.getElementById('apiModal').classList.remove('open'); }
+
+function toggleWorkerVis() {
+  const inp = document.getElementById('workerUrlInput');
+  const btn = document.getElementById('workerVisBtn');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
 function saveApiKey() {
   const key       = document.getElementById('apiKeyInput').value.trim();
   const workerUrl = document.getElementById('workerUrlInput').value.trim().replace(/\/$/, '');
@@ -4155,6 +4467,267 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (e.target === this) this.classList.remove('open');
   });
 });
+
+// ============================================================
+// AI 使用量追蹤 & 費用警告
+// ============================================================
+const AI_COST = {
+  chat   : { tokens: 1200, costTWD: 1.2, label: 'AI 問答' },
+  trend  : { tokens: 1400, costTWD: 1.5, label: '趨勢分析' },
+  recs   : { tokens: 1500, costTWD: 1.6, label: 'AI 推薦' },
+  holding: { tokens:  800, costTWD: 0.8, label: '持股分析' },
+  potential:{tokens: 2000, costTWD: 2.1, label: '潛力股分析' },
+};
+
+// 從 localStorage 恢復今日用量（每日自動重置）
+function getAiUsage() {
+  const today = new Date().toDateString();
+  const raw   = JSON.parse(localStorage.getItem('aiUsage') || '{}');
+  if (raw.date !== today) return { date: today, calls: {}, totalCost: 0, totalCalls: 0 };
+  return raw;
+}
+
+function trackAiUsage(type) {
+  const usage = getAiUsage();
+  const cost  = AI_COST[type] || { costTWD: 1, label: type };
+  usage.calls[type]  = (usage.calls[type] || 0) + 1;
+  usage.totalCalls   = (usage.totalCalls || 0) + 1;
+  usage.totalCost    = +((usage.totalCost || 0) + cost.costTWD).toFixed(1);
+  localStorage.setItem('aiUsage', JSON.stringify(usage));
+  updateAiUsageBadge();
+  // 費用警告
+  if (usage.totalCalls % 5 === 0 || usage.totalCost >= 10) {
+    showAiCostAlert(usage);
+  }
+}
+
+function updateAiUsageBadge() {
+  const usage = getAiUsage();
+  const badge = document.getElementById('aiUsageBadge');
+  const detail= document.getElementById('aiUsageDetail');
+  if (badge) badge.textContent = `📊 今日 ${usage.totalCalls} 次｜≈${usage.totalCost} TWD`;
+  if (detail) {
+    detail.innerHTML = Object.entries(usage.calls).map(([t, n]) => {
+      const info = AI_COST[t] || { label: t, costTWD: 1 };
+      return `<div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+        <span>${info.label}</span>
+        <span style="color:var(--accent);">${n}次 / ≈${(n*info.costTWD).toFixed(1)} TWD</span>
+      </div>`;
+    }).join('') + `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);
+      display:flex;justify-content:space-between;font-weight:600;">
+      <span>今日合計</span>
+      <span style="color:var(--gold);">${usage.totalCalls}次 / ≈${usage.totalCost} TWD</span>
+    </div>`;
+  }
+}
+
+function showAiUsage() {
+  const usage = getAiUsage();
+  showAiCostAlert(usage, true);
+}
+
+function showAiCostAlert(usage, manual=false) {
+  const limit = parseInt(localStorage.getItem('aiDailyLimit') || '50');
+  const isOver = usage.totalCost >= limit;
+  let modal = document.getElementById('aiCostModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'aiCostModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal" style="max-width:400px;">
+      <div class="modal-title" id="aiCostModalTitle">📊 AI 使用量</div>
+      <div id="aiCostModalBody"></div>
+      <div style="margin-top:14px;">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">每日費用警告上限（TWD）</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="number" id="aiLimitInput" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;" value="${limit}">
+          <button class="btn" onclick="saveAiLimit()">儲存</button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button class="btn-outline" onclick="document.getElementById('aiCostModal').style.display='none'">關閉</button>
+        <button class="btn-outline" onclick="resetAiUsage()">重置今日計數</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  document.getElementById('aiCostModalTitle').textContent = isOver && !manual ? '⚠️ AI 費用警告' : '📊 AI 使用量';
+  document.getElementById('aiCostModalBody').innerHTML = `
+    <div style="background:${isOver?'rgba(239,68,68,.1)':'var(--surface2)'};border-radius:8px;padding:12px;margin-bottom:12px;${isOver?'border:1px solid rgba(239,68,68,.3);':''}">
+      ${isOver && !manual ? '<div style="color:var(--red);font-weight:700;margin-bottom:8px;">⚠️ 今日 AI 費用已達上限！</div>' : ''}
+      <div style="font-size:14px;font-weight:700;">今日合計：${usage.totalCalls} 次 ／ ≈ ${usage.totalCost} TWD</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">（1 TWD ≈ 0.03 USD，依實際 token 用量略有差異）</div>
+    </div>
+    ${Object.entries(usage.calls).map(([t, n]) => {
+      const info = AI_COST[t] || { label: t, costTWD: 1 };
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;">
+        <span>${info.label}</span>
+        <span>${n} 次 ≈ ${(n*info.costTWD).toFixed(1)} TWD</span>
+      </div>`;
+    }).join('')}`;
+}
+
+function saveAiLimit() {
+  const v = parseInt(document.getElementById('aiLimitInput').value) || 50;
+  localStorage.setItem('aiDailyLimit', v);
+  document.getElementById('aiCostModal').style.display = 'none';
+  alert(`已設定每日警告上限：${v} TWD`);
+}
+
+function resetAiUsage() {
+  localStorage.removeItem('aiUsage');
+  document.getElementById('aiCostModal').style.display = 'none';
+  updateAiUsageBadge();
+}
+
+// 各 AI 功能加追蹤
+const _origRunAiAnalysis = runAiAnalysis;
+// (trackAiUsage 呼叫已在各函式末加入)
+
+
+
+// ============================================================
+// 市場總覽自訂義
+// ============================================================
+const DASHBOARD_WIDGETS = [
+  { id:'widget-indices',   label:'📈 大盤指數',   default:true },
+  { id:'widget-heatmap',   label:'🗺️ 類股熱力圖', default:true },
+  { id:'widget-sentiment', label:'🌡️ 市場情緒',   default:true },
+  { id:'widget-alerts',    label:'⚡ 快訊',        default:true },
+  { id:'widget-movers',    label:'🔥 漲跌排行',    default:true },
+  { id:'widget-sectors',   label:'📊 類股概況',    default:true },
+];
+
+// 對應 DOM id — 統一包裝 overview 中各 card 的父元素
+const WIDGET_DOM = {
+  'widget-indices'  : '.stats-grid',
+  'widget-heatmap'  : '#heatmapGrid',
+  'widget-sentiment': null,   // 用 CSS class 控制
+  'widget-alerts'   : '#quickAlerts',
+  'widget-movers'   : '#moversTable',
+  'widget-sectors'  : '#sectorsGrid',
+};
+
+function getDashConfig() {
+  return JSON.parse(localStorage.getItem('dashConfig') || '{}');
+}
+function saveDashConfig(cfg) {
+  localStorage.setItem('dashConfig', JSON.stringify(cfg));
+}
+function getHiddenSectors() {
+  return JSON.parse(localStorage.getItem('hiddenSectors') || '[]');
+}
+function saveHiddenSectors(arr) {
+  localStorage.setItem('hiddenSectors', JSON.stringify(arr));
+}
+
+function openDashboardSettings() {
+  document.getElementById('dashboardSettingsPanel').style.display = '';
+  renderDashWidgetToggles();
+  renderHeatmapSectorToggles();
+}
+function closeDashboardSettings() {
+  document.getElementById('dashboardSettingsPanel').style.display = 'none';
+  applyDashConfig();
+  renderHeatmap(); // 重繪熱力圖套用類股過濾
+}
+
+function renderDashWidgetToggles() {
+  const cfg = getDashConfig();
+  document.getElementById('dashWidgetToggles').innerHTML = DASHBOARD_WIDGETS.map(w => {
+    const on = cfg[w.id] !== undefined ? cfg[w.id] : w.default;
+    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px;background:var(--surface2);border-radius:8px;">
+      <input type="checkbox" ${on?'checked':''} style="accent-color:var(--accent);"
+        onchange="toggleWidget('${w.id}', this.checked)">
+      <span style="font-size:13px;">${w.label}</span>
+    </label>`;
+  }).join('');
+}
+
+function renderHeatmapSectorToggles() {
+  const hidden = getHiddenSectors();
+  document.getElementById('heatmapSectorToggles').innerHTML = Object.keys(SECTOR_STOCKS).map(name => {
+    const icon = (typeof SECTOR_ICONS !== 'undefined' ? SECTOR_ICONS[name] : '') || '📊';
+    const on   = !hidden.includes(name);
+    return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 8px;background:var(--surface2);border-radius:16px;font-size:12px;">
+      <input type="checkbox" ${on?'checked':''} style="accent-color:var(--accent);"
+        onchange="toggleSector('${name}', this.checked)">
+      <span>${icon} ${name}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleWidget(id, on) {
+  const cfg = getDashConfig();
+  cfg[id] = on;
+  saveDashConfig(cfg);
+}
+
+function toggleSector(name, on) {
+  const hidden = getHiddenSectors();
+  if (on) {
+    const idx = hidden.indexOf(name);
+    if (idx !== -1) hidden.splice(idx, 1);
+  } else {
+    if (!hidden.includes(name)) hidden.push(name);
+  }
+  saveHiddenSectors(hidden);
+}
+
+function applyDashConfig() {
+  const cfg = getDashConfig();
+  // 控制大盤指數 stats-grid
+  const statsGrid = document.querySelector('#page-overview .stats-grid');
+  if (statsGrid) statsGrid.style.display = (cfg['widget-indices'] === false) ? 'none' : '';
+  // 熱力圖 card（card 是 heatmapGrid 的 parentElement.parentElement）
+  const heatmapCard = document.getElementById('heatmapGrid')?.closest('.card');
+  if (heatmapCard) heatmapCard.style.display = (cfg['widget-heatmap'] === false) ? 'none' : '';
+  // 市場情緒 card
+  const sentCard = document.querySelector('#page-overview .progress-ring')?.closest('.card');
+  if (sentCard) sentCard.style.display = (cfg['widget-sentiment'] === false) ? 'none' : '';
+  // 快訊
+  const alertCard = document.getElementById('quickAlerts')?.closest('.card');
+  if (alertCard) alertCard.style.display = (cfg['widget-alerts'] === false) ? 'none' : '';
+}
+
+// 修改 renderHeatmap，套用隱藏類股
+const _origRenderHeatmap = renderHeatmap;
+function renderHeatmap() {
+  const hidden = getHiddenSectors();
+  const container = document.getElementById('heatmapGrid');
+  if (!container) return;
+  const sectorPcts = Object.entries(SECTOR_STOCKS)
+    .filter(([name]) => !hidden.includes(name))
+    .map(([name, stocks]) => {
+      const cached = stocks.map(c => state.stockCache[c]).filter(Boolean);
+      const avg = cached.length ? cached.reduce((a,b) => a + b.changePct, 0) / cached.length : 0;
+      return { name, pct: parseFloat(avg.toFixed(2)), dataCount: cached.length };
+    });
+
+  container.innerHTML = sectorPcts
+    .filter(s => s.dataCount > 0)
+    .map(s => {
+      const abs     = Math.abs(s.pct);
+      const opacity = 0.2 + Math.min(abs * 0.2, 0.6);
+      const bg   = s.pct >= 0 ? `rgba(16,185,129,${opacity})` : `rgba(239,68,68,${opacity})`;
+      const txt  = s.pct >= 0 ? 'var(--green)' : 'var(--red)';
+      const sign = s.pct >= 0 ? '+' : '';
+      const icon = (typeof SECTOR_ICONS !== 'undefined' ? SECTOR_ICONS[s.name] : '') || '📊';
+      return `<div class="heatmap-cell" style="background:${bg};" onclick="quickChat('分析台灣${s.name}類股今日走勢原因')">
+        <div class="cell-name">${icon} ${s.name}</div>
+        <div class="cell-pct" style="color:${txt}">${sign}${s.pct}%</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.35);">${s.dataCount}支</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--text-dim);padding:20px;text-align:center;font-size:12px;">資料載入中…</div>';
+}
+
+// 頁面初始化後套用設定
+document.addEventListener('DOMContentLoaded', () => { setTimeout(applyDashConfig, 800); });
+
+
+// 初始化用量 badge
+document.addEventListener("DOMContentLoaded", updateAiUsageBadge);
 </script>
 </body>
 </html>
