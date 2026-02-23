@@ -972,6 +972,7 @@
   <div class="tab" onclick="switchTab('calendar')">📅 財報行事曆</div>
   <div class="tab" onclick="switchTab('screener')">🔍 選股器</div>
   <div class="tab" onclick="switchTab('chat')">💬 AI 問答</div>
+  <div class="tab" onclick="switchTab('institutional')">🏛️ 法人動向</div>
   <div class="tab" onclick="switchTab('trend')">🔬 趨勢分析 <span class="tab-badge" style="background:var(--green)" id="trendBadge">NEW</span></div>
 </div>
 
@@ -1466,56 +1467,78 @@
 
 <!-- ===== PAGE: SCREENER ===== -->
 <div class="page fade-in" id="page-screener">
+  <!-- 快速篩選 Tag -->
   <div class="card mb-4">
-    <div class="section-title" style="margin-bottom:16px;">🔍 條件選股</div>
+    <div class="section-header">
+      <div class="section-title">🔍 條件選股</div>
+      <div style="font-size:12px;color:var(--text-dim);">快速條件：</div>
+    </div>
+    <div class="filter-bar" style="margin-bottom:16px;">
+      <button class="filter-chip" onclick="applyPreset('high_div')">💰 高殖利率 ≥5%</button>
+      <button class="filter-chip" onclick="applyPreset('low_pe')">📉 低本益比 ≤12</button>
+      <button class="filter-chip" onclick="applyPreset('ai')">🤖 AI概念股</button>
+      <button class="filter-chip" onclick="applyPreset('semicon')">🔬 半導體</button>
+      <button class="filter-chip" onclick="applyPreset('finance')">🏦 金融股</button>
+      <button class="filter-chip" onclick="applyPreset('up_today')">📈 今日上漲</button>
+      <button class="filter-chip" onclick="applyPreset('down_today')">📉 今日下跌</button>
+      <button class="filter-chip" onclick="applyPreset('high_vol')">🔥 量能放大</button>
+    </div>
+
+    <!-- 詳細條件 -->
     <div class="grid-3" style="gap:12px;margin-bottom:16px;">
       <div>
         <div class="stat-label" style="margin-bottom:6px;">產業類別</div>
-        <select style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:13px;outline:none;">
-          <option>全部類股</option>
-          <option>半導體</option>
-          <option>電子零組件</option>
-          <option>金融</option>
-          <option>傳產</option>
-          <option>生技醫療</option>
+        <select id="sc-sector" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:13px;outline:none;">
+          <option value="">全部類股</option>
+          <option value="半導體">🔬 半導體</option>
+          <option value="AI伺服器">🤖 AI伺服器</option>
+          <option value="電子零組件">🔧 電子零組件</option>
+          <option value="金融保險">🏦 金融保險</option>
+          <option value="電信">📡 電信</option>
+          <option value="傳產">🏭 傳產</option>
+          <option value="面板">🖥️ 面板</option>
+          <option value="生技">💊 生技</option>
+          <option value="網通">🌐 網通</option>
+          <option value="電動車">⚡ 電動車</option>
         </select>
       </div>
       <div>
         <div class="stat-label" style="margin-bottom:6px;">本益比 P/E</div>
         <div class="flex gap-2">
-          <input type="number" placeholder="最低" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-          <input type="number" placeholder="最高" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-pe-min" type="number" placeholder="最低" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-pe-max" type="number" placeholder="最高" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
         </div>
       </div>
       <div>
         <div class="stat-label" style="margin-bottom:6px;">殖利率 %</div>
         <div class="flex gap-2">
-          <input type="number" placeholder="最低%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-          <input type="number" placeholder="最高%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-yield-min" type="number" placeholder="最低%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-yield-max" type="number" placeholder="最高%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
         </div>
       </div>
       <div>
-        <div class="stat-label" style="margin-bottom:6px;">市值規模</div>
-        <select style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:13px;outline:none;">
-          <option>全部</option>
-          <option>大型股 (>1000億)</option>
-          <option>中型股 (100-1000億)</option>
-          <option>小型股 (<100億)</option>
+        <div class="stat-label" style="margin-bottom:6px;">今日漲跌幅 %</div>
+        <div class="flex gap-2">
+          <input id="sc-chg-min" type="number" placeholder="最低%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-chg-max" type="number" placeholder="最高%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+        </div>
+      </div>
+      <div>
+        <div class="stat-label" style="margin-bottom:6px;">股價區間 (元)</div>
+        <div class="flex gap-2">
+          <input id="sc-price-min" type="number" placeholder="最低" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+          <input id="sc-price-max" type="number" placeholder="最高" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
+        </div>
+      </div>
+      <div>
+        <div class="stat-label" style="margin-bottom:6px;">漲跌方向</div>
+        <select id="sc-dir" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:13px;outline:none;">
+          <option value="">不限</option>
+          <option value="up">↑ 今日上漲</option>
+          <option value="down">↓ 今日下跌</option>
+          <option value="strong">🔥 強勢 ≥+2%</option>
+          <option value="weak">💧 弱勢 ≤-2%</option>
         </select>
-      </div>
-      <div>
-        <div class="stat-label" style="margin-bottom:6px;">RSI 範圍</div>
-        <div class="flex gap-2">
-          <input type="number" placeholder="最低" value="30" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-          <input type="number" placeholder="最高" value="70" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-        </div>
-      </div>
-      <div>
-        <div class="stat-label" style="margin-bottom:6px;">EPS 年增率</div>
-        <div class="flex gap-2">
-          <input type="number" placeholder="最低%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-          <input type="number" placeholder="最高%" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:13px;outline:none;">
-        </div>
       </div>
     </div>
     <div class="flex gap-2">
@@ -1577,6 +1600,83 @@
     </div>
   </div>
 </div>
+
+<!-- ===== PAGE: INSTITUTIONAL ===== -->
+<div class="page fade-in" id="page-institutional">
+  <div class="notice-bar" id="instNote">
+    📊 資料來源：台灣證交所 T86 三大法人買賣超報表（盤後更新）
+  </div>
+
+  <!-- 總計橫幅 -->
+  <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;" id="instSummary">
+    <div class="stat-box">
+      <div class="stat-label">外資今日合計淨買超</div>
+      <div class="stat-value up" id="inst-total-buy">載入中...</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">外資今日合計淨賣超</div>
+      <div class="stat-value down" id="inst-total-sell">載入中...</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">資料日期</div>
+      <div class="stat-value" id="inst-date" style="font-size:14px;">--</div>
+    </div>
+  </div>
+
+  <div class="grid-left-wide">
+    <div>
+      <!-- 外資買超 Top 5 -->
+      <div class="card mb-4">
+        <div class="section-header">
+          <div class="section-title" style="color:var(--green);">🟢 外資買超 Top 10</div>
+          <span class="tag tag-green">淨買入（張）</span>
+        </div>
+        <div id="instBuyTable">
+          <div class="loading"><div class="spinner"></div> 載入中...</div>
+        </div>
+      </div>
+
+      <!-- 外資賣超 Top 5 -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title" style="color:var(--red);">🔴 外資賣超 Top 10</div>
+          <span class="tag tag-red">淨賣出（張）</span>
+        </div>
+        <div id="instSellTable">
+          <div class="loading"><div class="spinner"></div> 載入中...</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <!-- 三大法人合計 Top 10 -->
+      <div class="card mb-4">
+        <div class="section-header">
+          <div class="section-title">🏛️ 三大法人合計買超</div>
+          <span class="tag">外資+投信+自營</span>
+        </div>
+        <div id="instTotalTable">
+          <div class="loading"><div class="spinner"></div> 載入中...</div>
+        </div>
+      </div>
+
+      <!-- 說明 -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;"><span class="icon">📖</span> 法人說明</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.9;">
+          <div><span style="color:var(--accent);">外資</span>：外國機構投資人（QFII），最具市場指標性</div>
+          <div><span style="color:var(--green);">投信</span>：國內共同基金，代表本土法人動向</div>
+          <div><span style="color:var(--gold);">自營商</span>：證券商自有資金操作</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+            單位為「張」（1張=1000股），正數為買超，負數為賣超。<br>
+            資料為盤後公告，通常下午 4:00 後更新。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- ===== PAGE: TREND ANALYSIS ===== -->
 <div class="page fade-in" id="page-trend">
@@ -1767,18 +1867,29 @@ const STOCK_NAMES = {
   '2357':'華碩','2356':'英業達','2379':'瑞昱','2327':'國巨','3008':'大立光',
   '2395':'研華','6505':'台塑化','1301':'台塑','1303':'南亞','2207':'和泰車',
   '2801':'彰銀','5880':'合庫金','2912':'統一超','2823':'中壽','2887':'台新金',
+  '2409':'友達','3481':'群創','2474':'可成','4938':'和碩','6547':'聯特',
+  '1789':'神隆','4726':'永日','2345':'智邦','4977':'眾達','6239':'力成',
+  '2301':'光寶科','2353':'宏碁','1326':'台化','3045':'台灣大','4904':'遠傳',
+  '6781':'AES-KY','1537':'廣隆','3231':'緯創','6509':'聚紡',
 };
 
 // 類股對照（各類代表股）
 const SECTOR_STOCKS = {
-  '半導體':['2330','2303','2454','3034'],
-  'AI伺服器':['2382','2356','3231'],
-  '電子零組件':['2317','2308','2327'],
-  '金融保險':['2881','2886','2891','2884'],
-  '電信':['2412','3045'],
-  '傳產':['2002','1301','1303'],
-  '面板':['2409','3481'],
-  '生技':['4938','6547'],
+  '半導體'    :['2330','2303','2454','3034','2379'],
+  'AI伺服器'  :['2382','2356','3231','2353','3008'],
+  '電子零組件' :['2317','2308','2327','6239','2301'],
+  '金融保險'  :['2881','2886','2891','2884','2892','2885','5880'],
+  '電信'      :['2412','3045','4904'],
+  '傳產'      :['2002','1301','1303','1326','2207'],
+  '面板'      :['2409','3481','2474'],
+  '生技'      :['4938','6547','1789','4726'],
+  '網通'      :['2345','3考','6509','4977'],
+  '電動車'    :['2207','1537','6781'],
+};
+// 類股圖示
+const SECTOR_ICONS = {
+  '半導體':'🔬','AI伺服器':'🤖','電子零組件':'🔧','金融保險':'🏦',
+  '電信':'📡','傳產':'🏭','面板':'🖥️','生技':'💊','網通':'🌐','電動車':'⚡',
 };
 
 // 固定的靜態補充資料（TWSE 不提供 PE/殖利率即時值）
@@ -1788,11 +1899,34 @@ const STOCK_STATIC = {
   '2454':{ pe:18.7, yield:2.9, sector:'半導體' },
   '2382':{ pe:14.3, yield:3.5, sector:'AI伺服器' },
   '2412':{ pe:22.1, yield:4.8, sector:'電信' },
-  '2881':{ pe:9.8,  yield:5.2, sector:'金融' },
-  '2886':{ pe:10.5, yield:5.6, sector:'金融' },
+  '2881':{ pe:9.8,  yield:5.2, sector:'金融保險' },
+  '2886':{ pe:10.5, yield:5.6, sector:'金融保險' },
   '2308':{ pe:21.4, yield:2.3, sector:'電子零組件' },
   '2303':{ pe:13.2, yield:5.3, sector:'半導體' },
   '3034':{ pe:16.8, yield:3.8, sector:'半導體' },
+  '2002':{ pe:12.1, yield:5.1, sector:'傳產' },
+  '1301':{ pe:14.5, yield:4.8, sector:'傳產' },
+  '1303':{ pe:13.8, yield:5.0, sector:'傳產' },
+  '1326':{ pe:15.2, yield:4.5, sector:'傳產' },
+  '2409':{ pe:18.2, yield:1.2, sector:'面板' },
+  '3481':{ pe:22.4, yield:0.8, sector:'面板' },
+  '2474':{ pe:11.5, yield:3.2, sector:'面板' },
+  '4938':{ pe:16.3, yield:2.1, sector:'生技' },
+  '6547':{ pe:28.5, yield:0.5, sector:'生技' },
+  '1789':{ pe:32.1, yield:1.8, sector:'生技' },
+  '2891':{ pe:10.2, yield:5.5, sector:'金融保險' },
+  '2884':{ pe:11.5, yield:5.8, sector:'金融保險' },
+  '2892':{ pe:9.8,  yield:5.4, sector:'金融保險' },
+  '2885':{ pe:12.1, yield:5.1, sector:'金融保險' },
+  '5880':{ pe:10.8, yield:5.9, sector:'金融保險' },
+  '2379':{ pe:19.2, yield:3.1, sector:'半導體' },
+  '2327':{ pe:14.5, yield:3.6, sector:'電子零組件' },
+  '3008':{ pe:35.2, yield:1.2, sector:'AI伺服器' },
+  '2356':{ pe:13.1, yield:3.8, sector:'AI伺服器' },
+  '2345':{ pe:16.8, yield:3.2, sector:'網通' },
+  '3045':{ pe:21.5, yield:4.2, sector:'電信' },
+  '4904':{ pe:18.9, yield:4.5, sector:'電信' },
+  '2207':{ pe:15.2, yield:3.8, sector:'傳產' },
 };
 
 const NEWS_DATA = [
@@ -1921,12 +2055,27 @@ async function fetchYahooData() {
     return;
   }
   try {
-    const data = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(YAHOO_SYMBOLS)}`,
-      { signal: AbortSignal.timeout(8000) }).then(r=>r.json());
+    const res  = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(YAHOO_SYMBOLS)}`,
+      { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error(`Worker 回應 ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
     state.yahooData = data.result || {};
+    if (Object.keys(state.yahooData).length === 0) throw new Error('No quote data returned');
     updateMacroCards();
     updateOverviewCards();
-  } catch(e) { console.warn('Yahoo fetch failed:', e.message); }
+    // 隱藏「見附註」文字
+    document.getElementById('sp500-price').style.fontSize  = '';
+    document.getElementById('usdtwd-price').style.fontSize = '';
+  } catch(e) {
+    console.warn('Yahoo fetch failed:', e.message);
+    // 讓使用者看到具體錯誤而非只是空白
+    const errMsg = `⚠️ 美股資料暫時無法載入（${e.message}）`;
+    document.getElementById('sp500-change').innerHTML  = `<span style="font-size:11px;color:var(--gold);">${errMsg}</span>`;
+    document.getElementById('usdtwd-change').innerHTML = `<span style="font-size:11px;color:var(--gold);">請稍後重試或重整頁面</span>`;
+    document.getElementById('sp500-price').textContent  = '--';
+    document.getElementById('usdtwd-price').textContent = '--';
+  }
 }
 
 // ── RSS 新聞 ─────────────────────────────────────────────────
@@ -1998,7 +2147,9 @@ function getTWSEDateStr() {
 
 // ── 主要資料載入 ──────────────────────────────────────────────
 async function loadAllData() {
-  const allCodes = [...new Set([...state.watchlist,
+  // 收集所有類股代碼，確保熱力圖有完整資料
+  const sectorCodes = Object.values(SECTOR_STOCKS).flat();
+  const allCodes = [...new Set([...state.watchlist, ...sectorCodes,
     '2330','2317','2454','2382','2412','2881','2886','2308','2303','3034'])];
 
   // 同時發起所有請求
@@ -2098,6 +2249,10 @@ function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   event.target.classList.add('active');
   document.getElementById('page-' + tab).classList.add('active');
+  // 切到法人頁自動載入
+  if (tab === 'institutional') loadInstitutional();
+  // 切到趨勢頁初始化
+  if (tab === 'trend') initTrendPage();
 }
 
 // ============================================================
@@ -2188,20 +2343,24 @@ function renderHeatmap() {
     const cached = stocks.map(c => state.stockCache[c]).filter(Boolean);
     const avg = cached.length
       ? cached.reduce((a,b) => a + b.changePct, 0) / cached.length
-      : (Math.random() * 4 - 2); // 無資料時用隨機
-    return { name, pct: parseFloat(avg.toFixed(2)) };
+      : 0;
+    return { name, pct: parseFloat(avg.toFixed(2)), dataCount: cached.length };
   });
-  container.innerHTML = sectorPcts.map(s => {
-    const abs     = Math.abs(s.pct);
-    const opacity = 0.2 + Math.min(abs * 0.2, 0.6);
-    const bg  = s.pct >= 0 ? `rgba(16,185,129,${opacity})` : `rgba(239,68,68,${opacity})`;
-    const txt = s.pct >= 0 ? 'var(--green)' : 'var(--red)';
-    const sign = s.pct >= 0 ? '+' : '';
-    return `<div class="heatmap-cell" style="background:${bg};" onclick="quickChat('分析台灣${s.name}類股今日走勢原因')">
-      <div class="cell-name">${s.name}</div>
-      <div class="cell-pct" style="color:${txt}">${sign}${s.pct}%</div>
-    </div>`;
-  }).join('');
+  container.innerHTML = sectorPcts
+    .filter(s => s.dataCount > 0)   // 只顯示有真實資料的類股
+    .map(s => {
+      const abs     = Math.abs(s.pct);
+      const opacity = 0.2 + Math.min(abs * 0.2, 0.6);
+      const bg   = s.pct >= 0 ? `rgba(16,185,129,${opacity})` : `rgba(239,68,68,${opacity})`;
+      const txt  = s.pct >= 0 ? 'var(--green)' : 'var(--red)';
+      const sign = s.pct >= 0 ? '+' : '';
+      const icon = (typeof SECTOR_ICONS !== 'undefined' ? SECTOR_ICONS[s.name] : '') || '📊';
+      return `<div class="heatmap-cell" style="background:${bg};" onclick="quickChat('分析台灣${s.name}類股今日走勢原因')">
+        <div class="cell-name">${icon} ${s.name}</div>
+        <div class="cell-pct" style="color:${txt}">${sign}${s.pct}%</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.35);">${s.dataCount}支</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--text-dim);padding:20px;text-align:center;">資料載入中...</div>';
 }
 
 function animateSentiment(score) {
@@ -2264,10 +2423,9 @@ function renderSectors() {
   const sectorPcts = Object.entries(SECTOR_STOCKS).map(([name, stocks]) => {
     const cached = stocks.map(c => state.stockCache[c]).filter(Boolean);
     const avg = cached.length
-      ? cached.reduce((a,b) => a + b.changePct, 0) / cached.length
-      : (Math.random() * 4 - 2);
-    return { name, pct: parseFloat(avg.toFixed(2)) };
-  }).sort((a,b) => b.pct - a.pct);
+      ? cached.reduce((a,b) => a + b.changePct, 0) / cached.length : 0;
+    return { name, pct: parseFloat(avg.toFixed(2)), dataCount: cached.length };
+  }).filter(s => s.dataCount > 0).sort((a,b) => b.pct - a.pct);
 
   document.getElementById('sectorPerf').innerHTML = sectorPcts.map(s => {
     const cls  = s.pct >= 0 ? 'up' : 'down';
@@ -2537,15 +2695,18 @@ function renderRealNews(items) {
   document.getElementById('newsLoading').style.display = 'none';
   const sourceLabel = { cnyes:'鉅亨網', udn:'聯合財經', chinatimes:'中時', moneydj:'MoneyDJ' };
   document.getElementById('newsList').innerHTML = items.map(n => {
-    const src   = sourceLabel[n.source] || n.source;
-    const tStr  = n.pubDate ? relativeTime(new Date(n.pubDate)) : '';
-    return `<div class="news-item" onclick="window.open('${n.link}','_blank')">
+    const src     = sourceLabel[n.source] || n.source;
+    const tStr    = n.pubDate ? relativeTime(new Date(n.pubDate)) : '';
+    const hasLink = n.link && n.link.startsWith('http');
+    // 有連結：點標題開新分頁；沒連結：整張卡仍可看摘要
+    return `<div class="news-item" style="${hasLink ? 'cursor:pointer;' : ''}" ${hasLink ? `onclick="window.open('${n.link}','_blank')"` : ''}>
       <div class="news-meta">
         <span class="news-source">${src}</span>
         <span class="news-time">${tStr}</span>
         <span class="tag tag-blue">即時</span>
+        ${hasLink ? '<span class="tag" style="background:rgba(0,212,255,.1);color:var(--accent);font-size:10px;">🔗 點擊開啟</span>' : ''}
       </div>
-      <div class="news-title">${n.title}</div>
+      <div class="news-title" style="${hasLink ? 'color:var(--text);' : ''}">${n.title}</div>
       ${n.desc ? `<div class="news-summary">${n.desc}...</div>` : ''}
     </div>`;
   }).join('');
@@ -2719,8 +2880,11 @@ function runScreener() {
 }
 
 function resetScreener() {
-  document.querySelectorAll('#page-screener select').forEach(s => s.selectedIndex = 0);
-  document.querySelectorAll('#page-screener input[type="number"]').forEach(i => i.value = '');
+  ['sc-sector','sc-dir'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['sc-pe-min','sc-pe-max','sc-yield-min','sc-yield-max',
+   'sc-chg-min','sc-chg-max','sc-price-min','sc-price-max'].forEach(id => {
+    const el=document.getElementById(id); if(el) el.value='';
+  });
   document.getElementById('screenerResults').innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:30px;">設定條件後點選「開始篩選」</div>';
 }
 
@@ -2751,7 +2915,7 @@ function quickChat(msg) {
 
 function switchTabById(id) {
   document.querySelectorAll('.tab').forEach((t, i) => {
-    const tabs = ['overview','watchlist','portfolio','ai-analysis','news','macro','calendar','screener','chat','trend'];
+    const tabs = ['overview','watchlist','portfolio','ai-analysis','news','macro','calendar','screener','chat','institutional','trend'];
     if (tabs[i] === id) { t.click(); }
   });
   document.querySelectorAll('.tab').forEach(t => {
@@ -2819,6 +2983,95 @@ async function callClaudeAPI(userMsg) {
   }
 }
 
+
+
+// ============================================================
+// INSTITUTIONAL — 三大法人買賣超
+// ============================================================
+async function loadInstitutional() {
+  if (!WORKER_URL) {
+    document.getElementById('instNote').textContent =
+      '⚠️ 需設定 Cloudflare Worker 才能載入法人資料（Worker 有 TWSE T86 endpoint）';
+    document.getElementById('instBuyTable').innerHTML =
+      '<div class="notice-bar">請先設定 Worker 網址</div>';
+    document.getElementById('instSellTable').innerHTML = '';
+    document.getElementById('instTotalTable').innerHTML = '';
+    return;
+  }
+  try {
+    const today = getTWSEDateStr();
+    const res   = await fetch(`${WORKER_URL}?type=institutional&date=${today}`,
+      { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error(`Worker 回應 ${res.status}`);
+    const data  = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderInstitutional(data);
+  } catch(e) {
+    const msg = `<div style="color:var(--gold);padding:20px;text-align:center;font-size:13px;">⚠️ 載入失敗：${e.message}<br><button class="btn-outline" style="margin-top:8px;" onclick="loadInstitutional()">重試</button></div>`;
+    document.getElementById('instBuyTable').innerHTML  = msg;
+    document.getElementById('instSellTable').innerHTML = '';
+    document.getElementById('instTotalTable').innerHTML= '';
+  }
+}
+
+function renderInstitutional(data) {
+  // 總計
+  const buySum  = (data.totalNetBuy  / 1000).toFixed(0);
+  const sellSum = (data.totalNetSell / 1000).toFixed(0);
+  document.getElementById('inst-total-buy').textContent  = `+${Number(buySum).toLocaleString()} 千張`;
+  document.getElementById('inst-total-sell').textContent = `${Number(sellSum).toLocaleString()} 千張`;
+  document.getElementById('inst-date').textContent =
+    data.date ? `${data.date.slice(0,4)}/${data.date.slice(4,6)}/${data.date.slice(6,8)}` : '--';
+
+  // 表格渲染
+  const makeTable = (rows, isPositive) => {
+    if (!rows?.length) return '<div style="color:var(--text-dim);padding:20px;text-align:center;">無資料</div>';
+    const max = Math.abs(rows[0]?.foreignNet || 1);
+    return `<table class="data-table" style="width:100%;">
+      <thead><tr>
+        <th style="text-align:left;">股票</th>
+        <th style="text-align:right;">外資淨買超(張)</th>
+        <th style="text-align:right;">投信</th>
+        <th style="text-align:right;">三大合計</th>
+        <th style="width:100px;"></th>
+      </tr></thead>
+      <tbody>
+      ${rows.map((s,i) => {
+        const fNet  = s.foreignNet;
+        const cls   = fNet >= 0 ? 'up' : 'down';
+        const barW  = Math.min(Math.abs(fNet) / max * 100, 100).toFixed(0);
+        const barC  = fNet >= 0 ? 'var(--green)' : 'var(--red)';
+        const cached= state.stockCache[s.code];
+        const price = cached ? `<span style="font-size:11px;color:var(--text-dim);">${cached.price.toFixed(1)}</span>` : '';
+        return `<tr onclick="showStockDetail('${s.code}')" style="cursor:pointer;">
+          <td>
+            <div style="font-weight:500;">${s.name}</div>
+            <div style="font-size:11px;color:var(--text-dim);">${s.code} ${price}</div>
+          </td>
+          <td class="${cls}" style="text-align:right;font-family:'Space Mono',monospace;font-size:13px;">
+            ${fNet >= 0 ? '+' : ''}${fNet.toLocaleString()}
+          </td>
+          <td style="text-align:right;font-size:12px;color:var(--text-dim);">
+            ${s.trustNet >= 0 ? '+' : ''}${s.trustNet.toLocaleString()}
+          </td>
+          <td style="text-align:right;font-size:12px;color:${s.totalNet>=0?'var(--green)':'var(--red)'};">
+            ${s.totalNet >= 0 ? '+' : ''}${s.totalNet.toLocaleString()}
+          </td>
+          <td>
+            <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${barW}%;background:${barC};border-radius:3px;"></div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+  };
+
+  document.getElementById('instBuyTable').innerHTML   = makeTable(data.topBuy,   true);
+  document.getElementById('instSellTable').innerHTML  = makeTable(data.topSell,  false);
+  document.getElementById('instTotalTable').innerHTML = makeTable(data.topTotal,  true);
+}
 
 // ============================================================
 // TREND ANALYSIS — 核心引擎
