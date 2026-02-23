@@ -1019,7 +1019,7 @@
         <div class="card-title"><span class="icon">🗺️</span> 類股熱力圖</div>
         <div class="flex gap-2">
           <span class="text-xs text-dim">今日漲跌</span>
-          <button class="btn-outline" style="font-size:11px;padding:3px 10px;" onclick="const p=document.getElementById('dashCustomPanel');p.style.display=p.style.display==='none'?'block':'none'">⚙️ 自訂</button>
+          <button class="btn-outline" style="font-size:11px;padding:3px 10px;" onclick="openDashboardSettings()">⚙️ 自訂</button>
         </div>
       </div>
       <div class="heatmap-grid" id="heatmapGrid"></div>
@@ -1599,6 +1599,16 @@
   </div>
 </div>
 
+  <!-- FUNDAMENTALS PANEL -->
+  <div id="fundamentalsPanel" style="display:none;margin-top:0;">
+    <div id="fundamentalsContent">
+      <div style="text-align:center;padding:40px;color:var(--text-dim);">
+        <div style="font-size:36px;margin-bottom:12px;">💰</div>
+        <div>請先在上方輸入股票代碼並點擊「分析」，再切換到此頁籤</div>
+      </div>
+    </div>
+  </div>
+
 <!-- ===== PAGE: POTENTIAL STOCKS ===== -->
 <div class="page fade-in" id="page-potential">
   <div class="notice-bar">
@@ -1794,12 +1804,36 @@
         </div>
       </div>
 
-      <!-- 分析結果 -->
+      <!-- 分析 Tabs -->
+      <div id="trendTabs" style="display:none;margin-top:16px;">
+        <div style="display:flex;gap:0;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:12px;width:fit-content;">
+          <button id="trendTabAI" onclick="switchTrendTab('ai')"
+            style="padding:6px 16px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;background:var(--accent);color:#000;">
+            🤖 AI 趨勢
+          </button>
+          <button id="trendTabFund" onclick="switchTrendTab('fund')"
+            style="padding:6px 16px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;background:none;color:var(--text-dim);">
+            💰 基本面 & 配息
+          </button>
+        </div>
+      </div>
+
+      <!-- AI趨勢分析結果 -->
       <div id="trendResult">
         <div style="text-align:center;color:var(--text-dim);padding:60px 20px;">
           <div style="font-size:48px;margin-bottom:16px;">🔬</div>
           <div style="font-size:15px;font-weight:500;margin-bottom:8px;">選擇股票開始分析</div>
           <div style="font-size:13px;">AI 會根據真實市場資料判斷趨勢方向<br>並說明支持該判斷的具體原因</div>
+        </div>
+      </div>
+
+      <!-- 基本面分頁 -->
+      <div id="fundamentalsPanel" style="display:none;">
+        <div id="fundamentalsContent">
+          <div style="text-align:center;padding:40px;color:var(--text-dim);">
+            <div style="font-size:36px;margin-bottom:12px;">💰</div>
+            <div>點擊「分析」後切換到此頁籤</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1905,6 +1939,28 @@
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeApiModal()">取消</button>
       <button class="btn" onclick="saveApiKey()">儲存設定</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- DASHBOARD SETTINGS PANEL -->
+<div class="modal-overlay" id="dashboardSettingsPanel" style="display:none;align-items:flex-end;">
+  <div class="modal" style="max-width:600px;width:95%;max-height:85vh;overflow-y:auto;border-radius:16px 16px 0 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div class="modal-title" style="margin:0;">⚙️ 自訂儀表板</div>
+      <button onclick="closeDashboardSettings()" style="background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:10px;">📦 顯示元件</div>
+    <div id="dashWidgetToggles" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;"></div>
+
+    <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:10px;">🗺️ 熱力圖類股（勾選顯示）</div>
+    <div id="heatmapSectorToggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>
+
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="resetDashConfig()">恢復預設</button>
+      <button class="btn" onclick="closeDashboardSettings()">套用並關閉</button>
     </div>
   </div>
 </div>
@@ -2660,6 +2716,7 @@ async function addToWatchlist() {
   await fetchStockPrices(added);
   renderWatchlist();
   renderTicker();
+  setTimeout(checkPriceAlerts, 500);
   if (added.length > 1) showToast(`✅ 已新增 ${added.length} 支：${added.join(', ')}`);
 }
 
@@ -2717,6 +2774,8 @@ function showWatchlistDetail(code) {
     </div>
     <button class="btn mt-4" style="width:100%;margin-top:12px;" onclick="quickChat('幫我分析 ${s.name} (${code}) 這支股票，現價 ${s.price.toFixed(1)} 元，今日漲跌 ${sign}${s.changePct.toFixed(2)}%，請給我操作建議。')">🤖 AI 深度分析</button>
     <button class="btn-outline" style="width:100%;margin-top:8px;" onclick="openAddHolding('${code}')">+ 加入持股</button>
+    <button class="btn-outline" style="width:100%;margin-top:8px;" onclick="setStockAlert('${code}', ${s.price.toFixed(1)})">🔔 設價格警示</button>
+    <button class="btn-outline" style="width:100%;margin-top:8px;" onclick="switchTrendTab('fund');_currentTrendCode='${code}';switchTab('trend');setTimeout(()=>showFundamentals('${code}'),300)">💰 查看配息資料</button>
   `;
 }
 
@@ -3570,7 +3629,13 @@ async function callClaude(messages, maxTokens=1200) {
     throw new Error(err.error || `Worker 回應 ${res.status}`);
   }
   const data = await res.json();
-  if (data.error) throw new Error(data.error);
+  if (data.error) {
+    // Anthropic error 是 { type, message } 物件
+    const errMsg = typeof data.error === 'string'
+      ? data.error
+      : (data.error?.message || JSON.stringify(data.error));
+    throw new Error(errMsg);
+  }
   return data.content?.[0]?.text || '';
 }
 
@@ -4074,6 +4139,7 @@ async function analyzeTrend(code) {
 // ── 組裝事實資料表 ────────────────────────────────────────────
 function buildFactSheet(code) {
   const s       = state.stockCache[code] || {};
+  const st      = STOCK_STATIC[code] || {};
   const idx     = state.twseIndex || {};
   const sp500   = state.yahooData['^GSPC']   || {};
   const nasdaq  = state.yahooData['^IXIC']   || {};
@@ -4082,50 +4148,53 @@ function buildFactSheet(code) {
   const twd     = state.yahooData['USDTWD=X']|| {};
   const tnx     = state.yahooData['^TNX']    || {};
 
+  // 交易狀態判斷
+  const now         = new Date();
+  const hh          = now.getHours() + now.getMinutes()/60;
+  const isTradingHr = hh >= 9 && hh <= 13.5;
+  const isWeekend   = now.getDay() === 0 || now.getDay() === 6;
+  const marketOpen  = isTradingHr && !isWeekend;
+  const dataStatus  = s.price > 0 ? (marketOpen ? '盤中即時' : '盤後收盤') : '非交易時段/資料待載入';
+
   // 類股同伴平均
   const sectorStocks = Object.entries(SECTOR_STOCKS)
     .find(([, codes]) => codes.includes(code))?.[1] || [];
   const peers = sectorStocks
-    .filter(c => c !== code && state.stockCache[c])
-    .map(c => ({ code:c, name:state.stockCache[c].name, changePct:state.stockCache[c].changePct }));
+    .filter(c2 => c2 !== code && state.stockCache[c2]?.price > 0)
+    .map(c2 => ({ code:c2, name:state.stockCache[c2].name, changePct:state.stockCache[c2].changePct }));
   const sectorAvg = peers.length
     ? peers.reduce((a,b) => a + b.changePct, 0) / peers.length : null;
 
-  // 成交量異常（今日 vs 正常水準估算）
+  // 成交量
   const volumeNote = s.volume > 0
     ? (s.volume > 50000 ? '成交量顯著放大' : s.volume < 5000 ? '成交量萎縮' : '成交量正常')
-    : '成交量未知';
+    : '（非交易時段，無成交量資料）';
 
   // 近期新聞
-  const relNews = (state.rssNews || [])
-    .filter(n => n.title && (
-      n.title.includes(s.name) ||
-      n.title.includes(code) ||
-      (STOCK_NAMES[code] && n.title.includes(STOCK_NAMES[code]))
-    ))
-    .slice(0, 3)
-    .map(n => n.title);
+  const stockName = s.name || STOCK_NAMES[code] || code;
+  const relNews   = (state.rssNews || [])
+    .filter(n => n.title && (n.title.includes(stockName) || n.title.includes(code)))
+    .slice(0, 3).map(n => n.title);
 
   return {
-    // 個股
     code,
-    name         : s.name || STOCK_NAMES[code] || code,
+    name         : stockName,
     price        : s.price || 0,
     change       : s.change || 0,
     changePct    : s.changePct || 0,
-    open         : s.open || 0,
-    high         : s.high || 0,
-    low          : s.low || 0,
-    prev         : s.prev || 0,
+    open         : s.open  || 0,
+    high         : s.high  || 0,
+    low          : s.low   || 0,
+    prev         : s.prev  || s.price || 0,
     volume       : s.volume || 0,
     volumeNote,
-    pe           : s.pe || '-',
-    dividendYield: s.yield || '-',
-    sector       : s.sector || '未分類',
-    // 大盤
+    pe           : s.pe || st.pe || '-',
+    dividendYield: s.yield || st.yield || '-',
+    sector       : s.sector || st.sector || '未分類',
+    dataStatus,
+    marketOpen,
     twseChangePct: idx.changePct || 0,
     twseChange   : idx.change || 0,
-    // 美股
     sp500Pct     : sp500.changePct || 0,
     nasdaqPct    : nasdaq.changePct || 0,
     soxPct       : sox.changePct || 0,
@@ -4133,13 +4202,10 @@ function buildFactSheet(code) {
     usdtwd       : twd.price || 0,
     usdtwdPct    : twd.changePct || 0,
     tnx          : tnx.price || 0,
-    // 類股
     sectorAvg,
     peers        : peers.slice(0, 4),
-    // 新聞
     relatedNews  : relNews,
-    // 時間
-    analysisTime : new Date().toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }),
+    analysisTime : now.toLocaleString('zh-TW', { timeZone:'Asia/Taipei' }),
   };
 }
 
@@ -4157,10 +4223,11 @@ function buildTrendPrompt(code, f) {
 
   if (usePrice) dataBlocks.push(`【個股即時資料 - 來源：台灣證交所官方API】
 股票：${f.name}（${f.code}）
-現價：${f.price} 元
-今日漲跌：${f.change >= 0 ? '+' : ''}${f.change} 元 (${f.changePct >= 0 ? '+' : ''}${f.changePct}%)
-開盤：${f.open} / 最高：${f.high} / 最低：${f.low} / 昨收：${f.prev}
-價格相對昨收：${f.changePct > 0 ? '收漲' : f.changePct < 0 ? '收跌' : '平盤'}`);
+資料狀態：${f.dataStatus}
+現價：${f.price > 0 ? f.price + ' 元' : '尚未載入（可能為非交易時段）'}
+${f.price > 0 ? `今日漲跌：${f.change >= 0 ? '+' : ''}${f.change} 元 (${f.changePct >= 0 ? '+' : ''}${f.changePct}%)
+開盤：${f.open || '--'} / 最高：${f.high || '--'} / 最低：${f.low || '--'} / 昨收：${f.prev || '--'}` : '（請在交易日 09:00-13:30 期間查看即時資料）'}
+PE：${f.pe} | 殖利率：${f.dividendYield}% | 類股：${f.sector}`);
 
   if (useVolume) dataBlocks.push(`【成交量資料 - 來源：台灣證交所官方API】
 今日成交張數：${f.volume.toLocaleString()}
@@ -4234,6 +4301,207 @@ ${dataBlocks.join('\n\n')}
 }
 
 // ── 呼叫 Claude API ───────────────────────────────────────────
+
+// ============================================================
+// 配息/除權息 基本面資料
+// ============================================================
+
+// ── 趨勢分析 Tab 切換 ──────────────────────────────────────────
+let _currentTrendCode = '';
+function switchTrendTab(tab) {
+  const aiDiv   = document.getElementById('trendResult');
+  const fundDiv = document.getElementById('fundamentalsPanel');
+  const tabAI   = document.getElementById('trendTabAI');
+  const tabFund = document.getElementById('trendTabFund');
+  if (!aiDiv || !fundDiv) return;
+  if (tab === 'ai') {
+    aiDiv.style.display   = '';
+    fundDiv.style.display = 'none';
+    tabAI.style.background = 'var(--accent)';  tabAI.style.color = '#000';
+    tabFund.style.background = 'none';          tabFund.style.color = 'var(--text-dim)';
+  } else {
+    aiDiv.style.display   = 'none';
+    fundDiv.style.display = '';
+    tabAI.style.background = 'none';   tabAI.style.color = 'var(--text-dim)';
+    tabFund.style.background = 'var(--accent)'; tabFund.style.color = '#000';
+    if (_currentTrendCode) showFundamentals(_currentTrendCode);
+  }
+}
+
+
+// ============================================================
+// 股價警示
+// ============================================================
+function setStockAlert(code, currentPrice) {
+  const s = state.stockCache[code] || {};
+  const name = s.name || STOCK_NAMES[code] || code;
+  const alertDiv = document.createElement('div');
+  alertDiv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  alertDiv.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;width:320px;max-width:90%;">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;">🔔 設定 ${name}(${code}) 警示</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;">現價：${currentPrice} 元</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:12px;color:var(--green);">📈 突破上方目標價時通知</label>
+        <input type="number" id="_alertAbove" value="${(currentPrice*1.05).toFixed(1)}" 
+          style="width:100%;margin-top:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--red);">📉 跌破下方警戒價時通知</label>
+        <input type="number" id="_alertBelow" value="${(currentPrice*0.95).toFixed(1)}"
+          style="width:100%;margin-top:4px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="this.closest('[style]').remove()" 
+        style="flex:1;padding:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;cursor:pointer;">取消</button>
+      <button onclick="saveAlert('${code}','${name}',document.getElementById('_alertAbove').value,document.getElementById('_alertBelow').value);this.closest('[style*=inset]').remove()"
+        style="flex:1;padding:8px;background:var(--accent);border:none;color:#000;border-radius:8px;cursor:pointer;font-weight:600;">儲存警示</button>
+    </div>
+  </div>`;
+  document.body.appendChild(alertDiv);
+}
+
+function saveAlert(code, name, above, below) {
+  const alerts = JSON.parse(localStorage.getItem('priceAlerts') || '{}');
+  alerts[code] = { name, above: parseFloat(above)||null, below: parseFloat(below)||null };
+  localStorage.setItem('priceAlerts', JSON.stringify(alerts));
+  showToast(`✅ ${name} 警示已儲存：上 ${above} / 下 ${below}`);
+}
+
+function checkPriceAlerts() {
+  const alerts = JSON.parse(localStorage.getItem('priceAlerts') || '{}');
+  Object.entries(alerts).forEach(([code, al]) => {
+    const s = state.stockCache[code];
+    if (!s || s.price <= 0) return;
+    if (al.above && s.price >= al.above) {
+      showAlertNotification(code, al.name, `突破目標價 ${al.above}元`, 'up', s.price);
+    }
+    if (al.below && s.price <= al.below) {
+      showAlertNotification(code, al.name, `跌破警戒價 ${al.below}元`, 'down', s.price);
+    }
+  });
+}
+
+function showAlertNotification(code, name, msg, dir, price) {
+  const existing = document.getElementById(`alert-${code}`);
+  if (existing) return;
+  const el = document.createElement('div');
+  el.id = `alert-${code}`;
+  el.style.cssText = `position:fixed;top:${60 + Object.keys(JSON.parse(localStorage.getItem('priceAlerts')||'{}')).indexOf(code)*70}px;right:20px;z-index:9998;background:${dir==='up'?'rgba(16,185,129,.15)':'rgba(239,68,68,.15)'};border:1px solid ${dir==='up'?'var(--green)':'var(--red)'};border-radius:10px;padding:12px 16px;max-width:260px;box-shadow:0 4px 20px rgba(0,0,0,.3);cursor:pointer;`;
+  el.innerHTML = `<div style="font-weight:700;font-size:13px;">${dir==='up'?'📈':'📉'} ${name} (${code})</div>
+    <div style="font-size:12px;margin-top:2px;">${msg}</div>
+    <div style="font-size:14px;font-weight:700;font-family:'Space Mono',monospace;margin-top:4px;color:${dir==='up'?'var(--green)':'var(--red)'};">現價 ${price} 元</div>`;
+  el.onclick = () => el.remove();
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 15000);
+}
+
+async function fetchDividendData(code) {
+  if (!WORKER_URL) throw new Error('需要 Worker');
+  const res = await fetch(`${WORKER_URL}?type=dividend&code=${code}`, {
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) throw new Error(`Dividend API ${res.status}`);
+  return res.json();
+}
+
+async function showFundamentals(code) {
+  const panel = document.getElementById('fundamentalsPanel');
+  const content = document.getElementById('fundamentalsContent');
+  if (!panel || !content) return;
+
+  panel.style.display = '';
+  content.innerHTML = '<div class="loading"><div class="spinner"></div> 載入基本面資料...</div>';
+
+  try {
+    const data = await fetchDividendData(code);
+    const s  = state.stockCache[code] || {};
+    const st = STOCK_STATIC[code] || {};
+
+    const fin    = data.financials || {};
+    const divs   = data.dividends  || [];
+    const exRts  = data.exRights   || [];
+
+    // 計算近5年平均配息
+    const recent5 = divs.slice(0, 5);
+    const avgCash = recent5.length ? (recent5.reduce((a,b)=>a+(b.cashDiv||0),0)/recent5.length).toFixed(2) : '-';
+    const avgTotal= recent5.length ? (recent5.reduce((a,b)=>a+(b.totalDiv||0),0)/recent5.length).toFixed(2) : '-';
+
+    // 填息率分析
+    const fillRates = divs.filter(d=>d.fillRate).map(d=>d.fillRate);
+    const fillSummary = fillRates.length
+      ? `近 ${fillRates.length} 次除息：${fillRates.filter(r=>r.includes('填')||r.includes('>')||parseFloat(r)>0).length} 次填息`
+      : '填息資料不足';
+
+    // 今年預計除息
+    const thisYear = new Date().getFullYear();
+    const upcoming = divs.filter(d => d.exDivDate && d.exDivDate.startsWith(String(thisYear)));
+
+    content.innerHTML = `
+      <!-- 估值指標 -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        ${[
+          ['本益比 P/E', fin.pe != null ? fin.pe.toFixed(1) : (s.pe || st.pe || '--'), fin.pe < 15 ? 'var(--green)' : fin.pe > 25 ? 'var(--red)' : 'var(--gold)'],
+          ['股價淨值比 P/B', fin.pbr != null ? fin.pbr.toFixed(2) : '--', fin.pbr < 1.5 ? 'var(--green)' : fin.pbr > 3 ? 'var(--red)' : 'var(--gold)'],
+          ['殖利率', fin.yield != null ? fin.yield.toFixed(2)+'%' : (s.yield || st.yield || '--'), fin.yield > 5 ? 'var(--green)' : fin.yield > 3 ? 'var(--gold)' : 'var(--text-dim)'],
+        ].map(([label, val, color]) => `
+          <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${label}</div>
+            <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace;color:${color};">${val}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- 近年配息摘要 -->
+      <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px;">💰 近5年配息摘要</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
+          <div><span style="color:var(--text-dim);">平均現金股利</span><br><b>${avgCash} 元</b></div>
+          <div><span style="color:var(--text-dim);">平均總股利</span><br><b>${avgTotal} 元</b></div>
+          <div><span style="color:var(--text-dim);">填息紀錄</span><br><b>${fillSummary}</b></div>
+        </div>
+        ${upcoming.length ? `<div style="margin-top:8px;padding:6px 10px;background:rgba(0,212,255,.08);border-radius:6px;font-size:12px;">
+          📅 今年除息：${upcoming.map(d=>d.exDivDate+' 股利'+d.totalDiv+'元').join(' | ')}
+        </div>` : ''}
+      </div>
+
+      <!-- 歷年配息表 -->
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">📋 歷年除息紀錄</div>
+      ${divs.length ? `
+      <div style="overflow-x:auto;">
+        <table class="stock-table" style="font-size:12px;">
+          <thead><tr>
+            <th>年度</th><th>現金股利(元)</th><th>股票股利</th><th>合計</th>
+            <th>除息日</th><th>發放日</th><th>填息</th>
+          </tr></thead>
+          <tbody>${divs.map(d => {
+            const filled = d.fillRate && (d.fillRate.includes('填') || parseFloat(d.fillRate) > 0);
+            return `<tr>
+              <td>${d.year}</td>
+              <td class="price">${d.cashDiv || '--'}</td>
+              <td>${d.stockDiv || '--'}</td>
+              <td class="price" style="color:var(--gold);">${d.totalDiv || '--'}</td>
+              <td style="font-size:11px;">${d.exDivDate || '--'}</td>
+              <td style="font-size:11px;">${d.payDate || '--'}</td>
+              <td><span class="tag ${filled ? 'tag-green' : 'tag-red'}" style="font-size:10px;">
+                ${d.fillRate || '--'}
+              </span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>` : '<div style="color:var(--text-dim);text-align:center;padding:16px;">暫無配息歷史資料</div>'}
+
+      <div style="font-size:10px;color:var(--text-muted);margin-top:10px;text-align:right;">
+        資料來源：台灣證券交易所 ｜ ${new Date().toLocaleDateString('zh-TW')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--gold);padding:20px;text-align:center;font-size:13px;">
+      ⚠️ 無法載入：${e.message}<br>
+      <span style="font-size:11px;color:var(--text-dim);">部分股票可能不在 TWSE 資料庫</span>
+    </div>`;
+  }
+}
+
 async function callClaudeForTrend(prompt) {
   return callClaude([{ role: 'user', content: prompt }], 1400);
 }
@@ -4623,14 +4891,17 @@ function saveHiddenSectors(arr) {
 }
 
 function openDashboardSettings() {
-  document.getElementById('dashboardSettingsPanel').style.display = '';
+  const panel = document.getElementById('dashboardSettingsPanel');
+  if (!panel) return;
+  panel.style.display = 'flex';
   renderDashWidgetToggles();
   renderHeatmapSectorToggles();
 }
 function closeDashboardSettings() {
-  document.getElementById('dashboardSettingsPanel').style.display = 'none';
+  const panel = document.getElementById('dashboardSettingsPanel');
+  if (panel) panel.style.display = 'none';
   applyDashConfig();
-  renderHeatmap(); // 重繪熱力圖套用類股過濾
+  setTimeout(renderHeatmap, 100);
 }
 
 function renderDashWidgetToggles() {
@@ -4677,18 +4948,28 @@ function toggleSector(name, on) {
 
 function applyDashConfig() {
   const cfg = getDashConfig();
-  // 控制大盤指數 stats-grid
-  const statsGrid = document.querySelector('#page-overview .stats-grid');
-  if (statsGrid) statsGrid.style.display = (cfg['widget-indices'] === false) ? 'none' : '';
-  // 熱力圖 card（card 是 heatmapGrid 的 parentElement.parentElement）
-  const heatmapCard = document.getElementById('heatmapGrid')?.closest('.card');
+  const statsGrid  = document.querySelector('#page-overview .stats-grid');
+  if (statsGrid)   statsGrid.style.display   = (cfg['widget-indices'] === false) ? 'none' : '';
+  const heatmapCard= document.getElementById('overviewHeatmap') || document.getElementById('heatmapGrid')?.closest('.card');
   if (heatmapCard) heatmapCard.style.display = (cfg['widget-heatmap'] === false) ? 'none' : '';
-  // 市場情緒 card
-  const sentCard = document.querySelector('#page-overview .progress-ring')?.closest('.card');
-  if (sentCard) sentCard.style.display = (cfg['widget-sentiment'] === false) ? 'none' : '';
-  // 快訊
-  const alertCard = document.getElementById('quickAlerts')?.closest('.card');
-  if (alertCard) alertCard.style.display = (cfg['widget-alerts'] === false) ? 'none' : '';
+  const sentCard   = document.querySelector('#page-overview .progress-ring')?.closest('.card');
+  if (sentCard)    sentCard.style.display    = (cfg['widget-sentiment'] === false) ? 'none' : '';
+  const alertCard  = document.getElementById('overviewAlerts') || document.getElementById('quickAlerts')?.closest('.card');
+  if (alertCard)   alertCard.style.display   = (cfg['widget-alerts'] === false) ? 'none' : '';
+  const moversCard = document.getElementById('overviewMovers');
+  if (moversCard)  moversCard.style.display  = (cfg['widget-movers'] === false) ? 'none' : '';
+  const secCard    = document.getElementById('overviewSectors');
+  if (secCard)     secCard.style.display     = (cfg['widget-sectors'] === false) ? 'none' : '';
+}
+
+function resetDashConfig() {
+  localStorage.removeItem('dashConfig');
+  localStorage.removeItem('hiddenSectors');
+  applyDashConfig();
+  renderDashWidgetToggles();
+  renderHeatmapSectorToggles();
+  renderHeatmap();
+  showToast('✅ 已恢復預設設定');
 }
 
 // 修改 renderHeatmap，套用隱藏類股
