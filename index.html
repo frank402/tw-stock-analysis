@@ -4,6 +4,8 @@
   台股智析 Taiwan Stock Dashboard
   版本紀錄 (Changelog)
 ==============================================================
+  v10.0 2026-02-25  配息圖WantGoo並排雙色柱+橫式年份/配股欄修正
+                    國際股市 HTML ID 修正 + 三層代理備援
   v9.0  2026-02-24  修復所有點擊失效（switchTab 函式遺失）
                     國際股市 allorigins 雙備援，不依賴 Worker
                     類股熱力圖擴充至 TWSE 全 27 類股
@@ -74,27 +76,29 @@
   }
   .fund-val-tag { font-size: 10px; font-weight: 700; }
 
-  /* ── 配息橫條圖 ── */
-  .div-bar-wrap {
-    display: flex; gap: 6px; align-items: flex-end;
-    height: 120px; padding: 20px 4px 0; margin-bottom: 28px; position: relative;
+  /* ── 配息圖表 (WantGoo 雙色並排) ── */
+  .dchart-wrap    { width:100%; overflow-x:auto; }
+  .dchart-inner   {
+    display:flex; align-items:flex-end; gap:4px;
+    height:140px; border-bottom:2px solid var(--border);
+    padding:24px 4px 0; box-sizing:content-box;
   }
-  .div-bar-col {
-    flex: 1; display: flex; flex-direction: column; align-items: center;
-    justify-content: flex-end; min-width: 0; position: relative;
+  .dchart-col     {
+    flex:1; min-width:28px; display:flex; flex-direction:column;
+    align-items:center; justify-content:flex-end; position:relative;
   }
-  .div-bar-amt {
-    font-size: 9px; color: var(--text-dim); white-space: nowrap;
-    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  .dchart-bars    { display:flex; gap:2px; align-items:flex-end; width:100%; justify-content:center; }
+  .dchart-bar     { border-radius:3px 3px 0 0; min-width:8px; flex:1; max-width:22px; transition:height .6s ease; }
+  .dchart-bar:hover { filter:brightness(1.2); }
+  .dchart-top-label {
+    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    font-size:9px; color:var(--text-dim); white-space:nowrap;
+    font-family:'Space Mono',monospace; pointer-events:none;
   }
-  .div-bar-body {
-    width: 80%; border-radius: 3px 3px 0 0; min-height: 4px;
-    transition: height 0.8s cubic-bezier(.4,0,.2,1);
-  }
-  .div-bar-year {
-    font-size: 9px; color: var(--text-dim); white-space: nowrap;
-    margin-top: 6px; writing-mode: vertical-rl; transform: rotate(180deg);
-    height: 28px; line-height: 1;
+  .dchart-xaxis   { display:flex; gap:4px; padding:6px 4px 0; }
+  .dchart-xlabel  {
+    flex:1; min-width:28px; text-align:center;
+    font-size:10px; color:var(--text-dim); font-family:'Space Mono',monospace;
   }
 
   /* ── 52週進度條 ── */
@@ -1840,34 +1844,37 @@
 <!-- ===== PAGE: GLOBAL MARKETS ===== -->
 <div class="page fade-in" id="page-global">
   <!-- 國際股市橫幅 -->
-  <div class="notice-bar">🌍 國際股市即時資料，透過多重備援（Yahoo Finance + Stooq）自動更新。點擊各指數卡片可查看詳情。</div>
+  <div class="notice-bar" style="display:flex;justify-content:space-between;align-items:center;">
+    <span>🌍 國際股市透過多重備援自動更新（Worker → Yahoo + Proxy → Stooq）。Stooq 資料為前一交易日收盤。</span>
+    <button class="btn-outline" style="font-size:11px;padding:4px 12px;white-space:nowrap;margin-left:12px;" onclick="refreshGlobalData()">🔄 重新整理</button>
+  </div>
 
   <!-- 主要指數 -->
   <div style="font-size:13px;font-weight:700;color:var(--accent);margin:0 0 10px;">🇺🇸 美股</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;" id="usIndicesGrid">
     <div class="card global-idx-card" data-sym="^GSPC" onclick="showGlobalDetail('^GSPC')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇺🇸 S&P 500</div>
-      <div class="global-price" id="g-^GSPC-price">--</div>
-      <div class="global-change" id="g-^GSPC-change">--</div>
-      <svg class="sparkline" id="g-^GSPC-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-gspc-price">--</div>
+      <div class="global-change" id="g-gspc-change">--</div>
+      <svg class="sparkline" id="g-gspc-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^IXIC" onclick="showGlobalDetail('^IXIC')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💻 NASDAQ</div>
-      <div class="global-price" id="g-^IXIC-price">--</div>
-      <div class="global-change" id="g-^IXIC-change">--</div>
-      <svg class="sparkline" id="g-^IXIC-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-ixic-price">--</div>
+      <div class="global-change" id="g-ixic-change">--</div>
+      <svg class="sparkline" id="g-ixic-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^DJI" onclick="showGlobalDetail('^DJI')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🏭 道瓊 DJI</div>
-      <div class="global-price" id="g-^DJI-price">--</div>
-      <div class="global-change" id="g-^DJI-change">--</div>
-      <svg class="sparkline" id="g-^DJI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-dji-price">--</div>
+      <div class="global-change" id="g-dji-change">--</div>
+      <svg class="sparkline" id="g-dji-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^SOX" onclick="showGlobalDetail('^SOX')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🔬 費半 SOX</div>
-      <div class="global-price" id="g-^SOX-price">--</div>
-      <div class="global-change" id="g-^SOX-change">--</div>
-      <svg class="sparkline" id="g-^SOX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-sox-price">--</div>
+      <div class="global-change" id="g-sox-change">--</div>
+      <svg class="sparkline" id="g-sox-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
   </div>
 
@@ -1875,27 +1882,27 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;" id="asiaIndicesGrid">
     <div class="card global-idx-card" data-sym="^N225" onclick="showGlobalDetail('^N225')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇯🇵 日經 225</div>
-      <div class="global-price" id="g-^N225-price">--</div>
-      <div class="global-change" id="g-^N225-change">--</div>
-      <svg class="sparkline" id="g-^N225-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-n225-price">--</div>
+      <div class="global-change" id="g-n225-change">--</div>
+      <svg class="sparkline" id="g-n225-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^HSI" onclick="showGlobalDetail('^HSI')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇭🇰 恆生指數</div>
-      <div class="global-price" id="g-^HSI-price">--</div>
-      <div class="global-change" id="g-^HSI-change">--</div>
-      <svg class="sparkline" id="g-^HSI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-hsi-price">--</div>
+      <div class="global-change" id="g-hsi-change">--</div>
+      <svg class="sparkline" id="g-hsi-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="000001.SS" onclick="showGlobalDetail('000001.SS')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇨🇳 上証指數</div>
-      <div class="global-price" id="g-000001.SS-price">--</div>
-      <div class="global-change" id="g-000001.SS-change">--</div>
-      <svg class="sparkline" id="g-000001.SS-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-sh000001-price">--</div>
+      <div class="global-change" id="g-sh000001-change">--</div>
+      <svg class="sparkline" id="g-sh000001-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^KS11" onclick="showGlobalDetail('^KS11')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇰🇷 韓國 KOSPI</div>
-      <div class="global-price" id="g-^KS11-price">--</div>
-      <div class="global-change" id="g-^KS11-change">--</div>
-      <svg class="sparkline" id="g-^KS11-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-ks11-price">--</div>
+      <div class="global-change" id="g-ks11-change">--</div>
+      <svg class="sparkline" id="g-ks11-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
   </div>
 
@@ -1903,27 +1910,27 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
     <div class="card global-idx-card" data-sym="^GDAXI" onclick="showGlobalDetail('^GDAXI')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇩🇪 德DAX</div>
-      <div class="global-price" id="g-^GDAXI-price">--</div>
-      <div class="global-change" id="g-^GDAXI-change">--</div>
-      <svg class="sparkline" id="g-^GDAXI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-gdaxi-price">--</div>
+      <div class="global-change" id="g-gdaxi-change">--</div>
+      <svg class="sparkline" id="g-gdaxi-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^FTSE" onclick="showGlobalDetail('^FTSE')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇬🇧 英FTSE 100</div>
-      <div class="global-price" id="g-^FTSE-price">--</div>
-      <div class="global-change" id="g-^FTSE-change">--</div>
-      <svg class="sparkline" id="g-^FTSE-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-ftse-price">--</div>
+      <div class="global-change" id="g-ftse-change">--</div>
+      <svg class="sparkline" id="g-ftse-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="GC=F" onclick="showGlobalDetail('GC=F')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🥇 黃金 (USD/oz)</div>
-      <div class="global-price" id="g-GC=F-price">--</div>
-      <div class="global-change" id="g-GC=F-change">--</div>
-      <svg class="sparkline" id="g-GC=F-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-gcf-price">--</div>
+      <div class="global-change" id="g-gcf-change">--</div>
+      <svg class="sparkline" id="g-gcf-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="CL=F" onclick="showGlobalDetail('CL=F')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🛢️ 原油 WTI</div>
-      <div class="global-price" id="g-CL=F-price">--</div>
-      <div class="global-change" id="g-CL=F-change">--</div>
-      <svg class="sparkline" id="g-CL=F-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-clf-price">--</div>
+      <div class="global-change" id="g-clf-change">--</div>
+      <svg class="sparkline" id="g-clf-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
   </div>
 
@@ -1932,27 +1939,27 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
     <div class="card global-idx-card" data-sym="^VIX" onclick="showGlobalDetail('^VIX')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">😱 VIX 恐慌</div>
-      <div class="global-price" id="g-^VIX-price">--</div>
-      <div class="global-change" id="g-^VIX-change">--</div>
-      <svg class="sparkline" id="g-^VIX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-vix_idx-price">--</div>
+      <div class="global-change" id="g-vix_idx-change">--</div>
+      <svg class="sparkline" id="g-vix_idx-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="^TNX" onclick="showGlobalDetail('^TNX')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🏦 美10年債殖利率</div>
-      <div class="global-price" id="g-^TNX-price">--</div>
-      <div class="global-change" id="g-^TNX-change">--</div>
-      <svg class="sparkline" id="g-^TNX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-tnx-price">--</div>
+      <div class="global-change" id="g-tnx-change">--</div>
+      <svg class="sparkline" id="g-tnx-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="DX-Y.NYB" onclick="showGlobalDetail('DX-Y.NYB')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💵 美元指數 DXY</div>
-      <div class="global-price" id="g-DX-Y.NYB-price">--</div>
-      <div class="global-change" id="g-DX-Y.NYB-change">--</div>
-      <svg class="sparkline" id="g-DX-Y.NYB-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-dxy-price">--</div>
+      <div class="global-change" id="g-dxy-change">--</div>
+      <svg class="sparkline" id="g-dxy-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
     <div class="card global-idx-card" data-sym="USDJPY=X" onclick="showGlobalDetail('USDJPY=X')">
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💴 USD/JPY 日圓</div>
-      <div class="global-price" id="g-USDJPY=X-price">--</div>
-      <div class="global-change" id="g-USDJPY=X-change">--</div>
-      <svg class="sparkline" id="g-USDJPY=X-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div class="global-price" id="g-usdjpy-price">--</div>
+      <div class="global-change" id="g-usdjpy-change">--</div>
+      <svg class="sparkline" id="g-usdjpy-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
     </div>
   </div>
 
@@ -2899,134 +2906,196 @@ const GLOBAL_SYMBOLS = [
 const GLOBAL_SYM_EXTRA = '^N225,^HSI,000001.SS,^KS11,^GDAXI,^FTSE';
 
 let _globalLoaded = false;
+let _globalFetching = false;
+
+// Symbol → safe HTML ID map
+const GLOBAL_ID_MAP = { '^GSPC':'gspc', '^IXIC':'ixic', '^DJI':'dji', '^SOX':'sox', '^N225':'n225', '^HSI':'hsi', '000001.SS':'sh000001', '^KS11':'ks11', '^GDAXI':'gdaxi', '^FTSE':'ftse', 'GC=F':'gcf', 'CL=F':'clf', '^VIX':'vix_idx', '^TNX':'tnx', 'DX-Y.NYB':'dxy', 'USDJPY=X':'usdjpy', 'USDTWD=X':'usdtwd_g' };
+
+// Symbol name labels
+const GLOBAL_SYM_NAMES = {
+    '^GSPC':'S&P 500', '^IXIC':'NASDAQ', '^DJI':'道瓊', '^SOX':'費半',
+    '^N225':'日經225', '^HSI':'恆生指數', '000001.SS':'上証指數', '^KS11':'KOSPI',
+    '^GDAXI':'德DAX', '^FTSE':'英FTSE', 'GC=F':'黃金', 'CL=F':'原油WTI',
+    '^VIX':'VIX恐慌', '^TNX':'美10年債', 'DX-Y.NYB':'美元指數',
+    'USDJPY=X':'USD/JPY', 'USDTWD=X':'USD/TWD'
+};
+
+// Stooq symbol map
+const STOOQ_GLOBAL_MAP = {
+    '^GSPC':'spx', '^IXIC':'ndq', '^DJI':'dji', '^SOX':'sox',
+    '^VIX':'vix', '^TNX':'tnx', 'GC=F':'gc.f', 'CL=F':'cl.f',
+    '^N225':'n225', '^HSI':'hsi', '^GDAXI':'dax', '^FTSE':'ftse',
+    '^KS11':'kospi', 'DX-Y.NYB':'dxy'
+};
+
+function getGlobalId(sym) {
+  return GLOBAL_ID_MAP[sym] || sym.replace(/[\^.=\-]/g, '_').toLowerCase();
+}
+
 async function ensureGlobalData() {
-  if (_globalLoaded) return;
+  if (_globalLoaded || _globalFetching) return;
+  _globalFetching = true;
+
   const all = GLOBAL_SYMBOLS.join(',');
 
-  // ── 層1：Worker（最快最穩定）─────────────────────────────────
+  // ── Layer 1: Worker (most reliable) ────────────────────────
   if (WORKER_URL) {
     try {
-      const res = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(all)}`,
+      const r = await fetch(WORKER_URL + '?type=yahoo&symbols=' + encodeURIComponent(all),
         { signal: AbortSignal.timeout(12000) });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.result && Object.keys(data.result).length > 0) {
-          Object.assign(state.yahooData, data.result);
-          _globalLoaded = true;
-          return;
+      if (r.ok) {
+        const d = await r.json();
+        if (d.result && Object.keys(d.result).length >= 4) {
+          Object.assign(state.yahooData, d.result);
+          _globalLoaded = true; _globalFetching = false;
+          renderGlobalPage(); return;
         }
       }
-    } catch(e) { console.warn('Worker global failed:', e.message); }
+    } catch(e) { console.warn('[Intl L1]', e.message); }
   }
 
-  // ── 層2：Yahoo Finance 直接（透過 allorigins proxy）──────────
-  try {
-    const fields = 'regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName';
-    const yUrl = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(all)}&fields=${fields}&formatted=false&region=US&lang=en-US`;
-    const proxied = `https://api.allorigins.win/get?url=${encodeURIComponent(yUrl)}`;
-    const res = await fetch(proxied, { signal: AbortSignal.timeout(15000) });
-    if (res.ok) {
-      const outer = await res.json();
-      const raw   = JSON.parse(outer.contents || '{}');
-      const quotes = raw.quoteResponse?.result || [];
+  // ── Layer 2: Multiple CORS proxies for Yahoo Finance ───────
+  // Use Yahoo v7 (simpler, often works better via proxy)
+  const yhUrl = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols='
+    + encodeURIComponent(all)
+    + '&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName&formatted=false&lang=en-US';
+
+  // Different proxy services to try
+  const proxies = [
+    'https://corsproxy.io/?' + encodeURIComponent(yhUrl),
+    'https://api.allorigins.win/get?url=' + encodeURIComponent(yhUrl),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(yhUrl),
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) continue;
+      const outer = await r.json();
+      // Handle both: allorigins wraps in {contents}, corsproxy/codetabs returns direct
+      let raw;
+      if (outer.contents) {
+        try { raw = JSON.parse(outer.contents); } catch(_) { continue; }
+      } else {
+        raw = outer;
+      }
+      const quotes = (raw && (raw.quoteResponse?.result || raw.finance?.result)) || [];
       let count = 0;
       for (const q of quotes) {
         if (q.regularMarketPrice > 0) {
           state.yahooData[q.symbol] = {
-            name:      q.shortName || q.symbol,
-            price:     +q.regularMarketPrice.toFixed(3),
-            change:    +(q.regularMarketChange||0).toFixed(3),
-            changePct: +(q.regularMarketChangePercent||0).toFixed(2),
-            prev:      +(q.regularMarketPreviousClose||0).toFixed(3),
-            src:       'yahoo-allorigins',
+            name: q.shortName || GLOBAL_SYM_NAMES[q.symbol] || q.symbol,
+            price: +q.regularMarketPrice.toFixed(3),
+            change: +(q.regularMarketChange || 0).toFixed(3),
+            changePct: +(q.regularMarketChangePercent || 0).toFixed(2),
+            prev: +(q.regularMarketPreviousClose || 0).toFixed(3),
+            src: 'yahoo-proxy',
           };
           count++;
         }
       }
-      if (count > 0) { _globalLoaded = true; return; }
-    }
-  } catch(e) { console.warn('allorigins Yahoo failed:', e.message); }
+      if (count >= 4) {
+        console.log('[Intl L2] Got ' + count + ' quotes via', proxyUrl.split('?')[0]);
+        _globalLoaded = true; _globalFetching = false;
+        renderGlobalPage(); return;
+      }
+    } catch(e) { console.warn('[Intl L2] proxy failed:', proxyUrl.split('?')[0], e.message); }
+  }
 
-  // ── 層3：Stooq CSV 逐一備援（限美股+主要指數）──────────────
-  const stooqMap = {
-    '^GSPC':'spx','^IXIC':'ndq','^DJI':'dji','^SOX':'sox',
-    '^VIX':'vix','^TNX':'tnx','GC=F':'gc.f','CL=F':'cl.f',
-    '^N225':'n225','^HSI':'hsi','^GDAXI':'dax','^FTSE':'ftse',
-    '^KS11':'kospi','DX-Y.NYB':'dxy',
-  };
-  const symNames = {
-    '^GSPC':'S&P 500','^IXIC':'NASDAQ','^DJI':'道瓊','^SOX':'費半',
-    '^VIX':'VIX','^TNX':'美10年債','GC=F':'黃金','CL=F':'原油',
-    '^N225':'日經225','^HSI':'恆生','000001.SS':'上証','^KS11':'KOSPI',
-    '^GDAXI':'德DAX','^FTSE':'英FTSE','^KS11':'韓KOSPI',
-    'DX-Y.NYB':'美元指數','USDTWD=X':'USD/TWD','USDJPY=X':'USD/JPY',
-  };
-  const stooqFetches = GLOBAL_SYMBOLS
-    .filter(s => stooqMap[s] && !state.yahooData[s]?.price)
-    .slice(0, 8) // 最多8個，避免rate limit
+  // ── Layer 3: Stooq CSV per-symbol (always works, previous day data) ─
+  console.log('[Intl L3] Using Stooq fallback');
+  const jobs = GLOBAL_SYMBOLS
+    .filter(s => STOOQ_GLOBAL_MAP[s] && !(state.yahooData[s] && state.yahooData[s].price > 0))
     .map(async sym => {
       try {
-        const sn = stooqMap[sym];
-        const sUrl = `https://stooq.com/q/d/l/?s=${sn}&i=d&l=3`;
-        const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(sUrl)}`,
+        const sn  = STOOQ_GLOBAL_MAP[sym];
+        const url = 'https://stooq.com/q/d/l/?s=' + sn + '&i=d&l=3';
+        const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url),
           { signal: AbortSignal.timeout(8000) });
         if (!r.ok) return;
         const j = await r.json();
-        const lines = (j.contents||'').trim().split('\n').filter(l => l && !l.startsWith('Date'));
+        const lines = (j.contents || '').trim().split('\n')
+          .filter(function(l){ return l && !l.startsWith('Date') && !l.includes('No data'); });
         if (lines.length < 2) return;
-        const last = lines[lines.length-1].split(',');
-        const prev = lines[lines.length-2].split(',');
-        const close = parseFloat(last[4]) || 0;
-        const prevC = parseFloat(prev[4]) || close;
+        const last  = lines[lines.length - 1].split(',');
+        const prev2 = lines[lines.length - 2].split(',');
+        const close = parseFloat(last[4])  || 0;
+        const prevC = parseFloat(prev2[4]) || close;
         if (close > 0) {
           const ch = +(close - prevC).toFixed(3);
           state.yahooData[sym] = {
-            name: symNames[sym] || sym, price: close,
-            change: ch, changePct: prevC > 0 ? +((ch/prevC)*100).toFixed(2):0,
+            name: GLOBAL_SYM_NAMES[sym] || sym, price: close,
+            change: ch, changePct: prevC > 0 ? +((ch / prevC) * 100).toFixed(2) : 0,
             prev: prevC, src: 'stooq',
           };
         }
       } catch(_) {}
     });
-  await Promise.allSettled(stooqFetches);
-  _globalLoaded = true; // 標記完成（即使部分失敗）
+
+  await Promise.allSettled(jobs);
+  _globalLoaded = true; _globalFetching = false;
+  renderGlobalPage();
 }
+
 
 function renderGlobalPage() {
   GLOBAL_SYMBOLS.forEach(sym => {
-    const d  = state.yahooData[sym];
-    const pfx = 'g-' + sym + '-';
-    const pEl = document.getElementById(pfx + 'price');
-    const cEl = document.getElementById(pfx + 'change');
-    const sEl = document.getElementById(pfx + 'spark');
+    const d   = state.yahooData[sym];
+    const sid = getGlobalId(sym);
+    const pEl = document.getElementById('g-' + sid + '-price');
+    const cEl = document.getElementById('g-' + sid + '-change');
+    const sEl = document.getElementById('g-' + sid + '-spark');
     if (!pEl) return;
+
     if (!d || !d.price) {
-      pEl.textContent = '--';
-      pEl.style.color = 'var(--text-dim)';
-      if (cEl) cEl.innerHTML = '<span style="font-size:10px;color:var(--text-dim);">載入中</span>';
+      pEl.textContent  = '--';
+      pEl.style.color  = 'var(--text-dim)';
+      if (cEl) cEl.innerHTML = '<span style="font-size:10px;color:var(--text-dim);">載入中...</span>';
       return;
     }
+
     const up   = d.changePct >= 0;
     const sign = up ? '+' : '';
     const col  = up ? 'var(--green)' : 'var(--red)';
 
-    // 自動格式：大數字加逗號，小數字保留小數點
+    // 格式化數字
     let priceStr;
-    if (d.price >= 1000) priceStr = d.price.toLocaleString('zh-TW', {maximumFractionDigits:2});
-    else if (d.price >= 100) priceStr = d.price.toFixed(2);
-    else priceStr = d.price.toFixed(3);
+    if (d.price >= 10000)     priceStr = d.price.toLocaleString('en', {maximumFractionDigits:0});
+    else if (d.price >= 1000) priceStr = d.price.toLocaleString('en', {maximumFractionDigits:1});
+    else if (d.price >= 100)  priceStr = d.price.toFixed(2);
+    else                      priceStr = d.price.toFixed(3);
 
-    pEl.textContent  = priceStr;
-    pEl.style.color  = col;
-    cEl.innerHTML    = `<span style="color:${col};">${sign}${d.changePct.toFixed(2)}% <span style="color:var(--text-dim);font-size:10px;">(${sign}${d.change?.toFixed(2)||'--'})</span></span>`;
+    pEl.textContent = priceStr;
+    pEl.style.color = col;
+
+    if (cEl) cEl.innerHTML = `
+      <span style="color:${col};font-size:13px;font-weight:700;">
+        ${sign}${d.changePct.toFixed(2)}%
+      </span>
+      <span style="color:var(--text-dim);font-size:10px;margin-left:4px;">
+        ${sign}${Math.abs(d.change).toFixed(d.price > 100 ? 1 : 3)}
+        ${d.src === 'stooq' ? '<span style="opacity:.5;font-size:9px;">(盤後)</span>' : ''}
+      </span>`;
+
     if (sEl) {
-      const lo = d.price * (1 - Math.abs(d.changePct)/100 * 3);
-      const hi = d.price * (1 + Math.abs(d.changePct)/100 * 3);
-      renderSparkline(pfx + 'spark', randomWalkData(20, lo, hi), up);
+      const lo = d.price * (1 - Math.abs(d.changePct) / 100 * 5);
+      const hi = d.price * (1 + Math.abs(d.changePct) / 100 * 5);
+      renderSparkline('g-' + sid + '-spark', randomWalkData(20, lo, hi), up);
     }
   });
-  // 更新 miniGlobal
+
   updateMiniGlobal();
+}
+
+// 重新整理按鈕
+function refreshGlobalData() {
+  _globalLoaded = false;
+  // Reset UI to loading state
+  document.querySelectorAll('[id^="g-"][id$="-price"]').forEach(el => {
+    el.textContent = '⏳';
+    el.style.color = 'var(--text-dim)';
+  });
+  ensureGlobalData();
 }
 
 function showGlobalDetail(sym) {
@@ -3088,7 +3157,11 @@ function switchTab(tab) {
   // 各頁面初始化
   if (tab === 'institutional') loadInstitutional();
   if (tab === 'trend') initTrendPage();
-  if (tab === 'global') ensureGlobalData().then(() => setTimeout(renderGlobalPage, 200));
+  if (tab === 'global') {
+    // First render with whatever data exists, then fetch fresh
+    renderGlobalPage();
+    ensureGlobalData();
+  }
 }
 
 // ============================================================
@@ -5145,6 +5218,42 @@ async function loadFundamentals(inputCode) {
   }
 }
 
+
+// ============================================================
+// 配息圖表建構函式 (WantGoo 並排雙色柱)
+// 分離出來避免 template literal 巢狀問題
+// ============================================================
+function buildDivChart(hy) {
+  var CHART_H  = 130; // px
+  var displayed = hy.slice(0, 20).slice().reverse(); // 由舊到新排序
+  var maxVal = 0.01;
+  displayed.forEach(function(h) {
+    maxVal = Math.max(maxVal, h.amount || 0, h.stock || 0);
+  });
+
+  var cols = displayed.map(function(h) {
+    var cash  = h.amount || 0;
+    var stock = h.stock  || 0;
+    var total = cash + stock;
+    var cashH  = cash  > 0 ? Math.max(cash  / maxVal * CHART_H, 4) : 0;
+    var stockH = stock > 0 ? Math.max(stock / maxVal * CHART_H, 4) : 0;
+    var label  = total > 0 ? total.toFixed(2) : '';
+    var topLabel  = label ? '<div class="dchart-top-label">' + label + '</div>' : '';
+    var cashBar   = cash  > 0 ? '<div class="dchart-bar" style="height:' + cashH  + 'px;background:#4dd0e1;" title="現金 ' + cash.toFixed(4)  + '"></div>' : '';
+    var stockBar  = stock > 0 ? '<div class="dchart-bar" style="height:' + stockH + 'px;background:#f9a825;" title="股票 ' + stock.toFixed(4) + '"></div>' : '';
+    return '<div class="dchart-col">' + topLabel + '<div class="dchart-bars">' + cashBar + stockBar + '</div></div>';
+  }).join('');
+
+  var xLabels = displayed.map(function(h) {
+    return '<div class="dchart-xlabel">' + h.year + '</div>';
+  }).join('');
+
+  return '<div class="dchart-wrap" style="margin-bottom:20px;">'
+       + '<div class="dchart-inner">' + cols + '</div>'
+       + '<div class="dchart-xaxis">' + xLabels + '</div>'
+       + '</div>';
+}
+
 // ============================================================
 // 基本面頁面完整渲染 (v4 WantGoo風格 - 圖表 + 完整數據)
 // ============================================================
@@ -5202,7 +5311,7 @@ function renderFundamentals(code, name, price, changePct, data) {
   // ── 配息統計 ───────────────────────────────────────────────
   const recent5  = hy.slice(0, 5);
   const avgDiv   = recent5.length ? (recent5.reduce((s,h)=>s+(h.amount||0),0)/recent5.length) : null;
-  const maxDiv   = hy.length ? Math.max(...hy.map(h=>h.amount||0)) : 1;
+  const maxDiv   = hy.length ? Math.max(...hy.map(h => Math.max(h.amount||0, h.stock||0)), 0.01) : 1;
   const divCount = hy.length;
 
   // ── 52週位置 ───────────────────────────────────────────────
@@ -5300,59 +5409,36 @@ function renderFundamentals(code, name, price, changePct, data) {
         </div>
       </div>
 
-      ${hy.length > 0 ? `
-      <!-- 橫條圖 (堆疊式：現金+配股) -->
-      <div style="overflow-x:auto;margin-bottom:20px;">
-        <div class="div-bar-wrap" style="min-width:${Math.max(hy.length,8)*44}px;max-width:100%;">
-          ${hy.slice(0,16).reverse().map(function(h){
-            var BAR_MAX = 96;
-            var cashPx  = maxDiv > 0 ? Math.max((h.amount||0)/maxDiv*BAR_MAX, h.amount>0?4:0) : 0;
-            var stockPx = maxDiv > 0 ? Math.max((h.stock||0)/maxDiv*BAR_MAX, h.stock>0?3:0)  : 0;
-            var totalLabel = ((h.amount||0)+(h.stock||0)).toFixed(2);
-            var stockBar = stockPx > 0 ? '<div class="div-bar-body" style="height:'+stockPx+'px;background:var(--gold);opacity:0.9;margin-bottom:1px;"></div>' : '';
-            var cashBar  = cashPx  > 0 ? '<div class="div-bar-body" style="height:'+cashPx+'px;background:var(--accent);opacity:0.85;"></div>' : '<div style="height:4px;background:var(--border);border-radius:3px;"></div>';
-            return '<div class="div-bar-col"><div class="div-bar-amt">'+totalLabel+'</div>'+stockBar+cashBar+'<div class="div-bar-year">'+h.year+'</div></div>';
-          }).join('')}
-        </div>
-      </div>
+      ${hy.length > 0 ? buildDivChart(hy) : '<div style="text-align:center;padding:40px;color:var(--text-dim);"><div style="font-size:32px;margin-bottom:8px;">📭</div><div>此股票目前無配息紀錄</div></div>'}
 
-      <!-- 詳細表格 -->
-      <div style="overflow-x:auto;">
+      ${hy.length > 0 ? `
+      <div style="overflow-x:auto;margin-top:16px;">
         <table class="stock-table" style="font-size:12px;width:100%;">
           <thead>
             <tr style="background:var(--surface2);">
               <th style="text-align:left;padding:8px;">除息年度</th>
-              <th style="text-align:right;color:var(--accent);">現金股利(元)</th>
-              <th style="text-align:right;color:var(--gold);">股票股利(股)</th>
+              <th style="text-align:right;color:#4dd0e1;">現金股利(元)</th>
+              <th style="text-align:right;color:#f9a825;">股票股利(股)</th>
               <th style="text-align:right;">合計</th>
               <th>除息日</th>
             </tr>
           </thead>
           <tbody>
-            ${hy.slice(0,16).map(h=>{
+            ${hy.slice(0,20).map(h=>{
               const cash  = typeof h.amount==='number' ? h.amount : 0;
               const stock = typeof h.stock ==='number' ? h.stock  : 0;
               const total = cash + stock;
-              return `<tr>
-                <td style="font-weight:700;padding:7px 8px;">${h.year}</td>
-                <td style="text-align:right;font-family:'Space Mono',monospace;font-weight:700;color:${cash>0?'var(--accent)':'var(--text-dim)'};">
-                  ${cash>0?cash.toFixed(4):'--'}
-                </td>
-                <td style="text-align:right;font-family:'Space Mono',monospace;font-weight:700;color:${stock>0?'var(--gold)':'var(--text-dim)'};">
-                  ${stock>0?stock.toFixed(4):'--'}
-                </td>
-                <td style="text-align:right;font-family:'Space Mono',monospace;color:var(--text);">${total>0?total.toFixed(4):'--'}</td>
-                <td style="font-size:11px;color:var(--text-dim);">${h.date||'--'}</td>
-              </tr>`;
+              return '<tr>'
+                + '<td style="font-weight:700;padding:7px 8px;">' + h.year + '</td>'
+                + '<td style="text-align:right;font-family:Space Mono,monospace;font-weight:700;color:' + (cash>0?'#4dd0e1':'var(--text-dim)') + ';">' + (cash>0?cash.toFixed(4):'--') + '</td>'
+                + '<td style="text-align:right;font-family:Space Mono,monospace;font-weight:700;color:' + (stock>0?'#f9a825':'var(--text-dim)') + ';">' + (stock>0?stock.toFixed(4):'--') + '</td>'
+                + '<td style="text-align:right;font-family:Space Mono,monospace;">' + (total>0?total.toFixed(4):'--') + '</td>'
+                + '<td style="font-size:11px;color:var(--text-dim);">' + (h.date||'--') + '</td>'
+                + '</tr>';
             }).join('')}
           </tbody>
         </table>
-      </div>
-      ` : `
-      <div style="text-align:center;padding:40px;color:var(--text-dim);">
-        <div style="font-size:32px;margin-bottom:8px;">📭</div>
-        <div>此股票目前無配息紀錄（成長型或資料待更新）</div>
-      </div>`}
+      </div>` : ''}
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">
         <div style="font-size:10px;color:var(--text-muted);">資料來源：Yahoo Finance (${code}.TW) ｜ 台灣證交所 ｜ ${new Date().toLocaleDateString('zh-TW')}</div>
