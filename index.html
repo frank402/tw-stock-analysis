@@ -25,6 +25,67 @@
     --grid-line: rgba(0,212,255,0.03);
     --card-shadow: 0 2px 12px rgba(0,0,0,0.3);
   }
+
+
+  /* ── 基本面頁面 ── */
+  .fund-val-card {
+    background: var(--surface2); border-radius: 12px; padding: 16px;
+    position: relative; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .fund-val-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .fund-val-label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+  .fund-val-number {
+    font-size: 28px; font-weight: 700; font-family: 'Space Mono', monospace;
+    line-height: 1; margin-bottom: 4px;
+  }
+  .fund-val-tag { font-size: 10px; font-weight: 700; }
+
+  /* ── 配息橫條圖 ── */
+  .div-bar-wrap {
+    display: flex; gap: 6px; align-items: flex-end;
+    height: 100px; padding: 0 4px 0; margin-bottom: 24px;
+  }
+  .div-bar-col {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  }
+  .div-bar-amt { font-size: 9px; color: var(--text-dim); white-space: nowrap; }
+  .div-bar-body {
+    width: 100%; border-radius: 3px 3px 0 0;
+    transition: height 0.6s cubic-bezier(.4,0,.2,1);
+  }
+  .div-bar-year {
+    font-size: 9px; color: var(--text-dim); transform: rotate(-40deg);
+    white-space: nowrap; margin-top: 4px;
+  }
+
+  /* ── 52週進度條 ── */
+  .week52-bar {
+    height: 6px; background: var(--surface2); border-radius: 3px;
+    position: relative; margin: 8px 0 4px; overflow: visible;
+  }
+  .week52-fill {
+    position: absolute; top: 0; left: 0; height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--gold));
+    border-radius: 3px; transition: width 0.8s ease;
+  }
+  .week52-dot {
+    position: absolute; top: -4px; width: 14px; height: 14px; background: white;
+    border-radius: 50%; transform: translateX(-50%);
+    border: 2.5px solid var(--accent); box-shadow: 0 0 8px rgba(0,212,255,.4);
+  }
+
+  /* ── 國際股市 ── */
+  .global-idx-card {
+    cursor: pointer; transition: transform 0.15s, border-color 0.15s;
+    border: 1px solid var(--border);
+  }
+  .global-idx-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .global-price {
+    font-size: 20px; font-weight: 700; font-family: 'Space Mono', monospace;
+    margin: 6px 0 2px;
+  }
+  .global-change { font-size: 12px; margin-bottom: 6px; }
+
   /* ── 日間模式 ── */
   [data-theme="light"] {
     --bg: #f0f4f8;
@@ -1046,6 +1107,7 @@
   <div class="tab" onclick="switchTab('potential')">💎 潛力股</div>
   <div class="tab" onclick="switchTab('trend')">🔬 趨勢分析 <span class="tab-badge" style="background:var(--green)" id="trendBadge">NEW</span></div>
   <div class="tab" onclick="switchTab('fundamentals')">💰 基本面</div>
+  <div class="tab" onclick="switchTab('global')">🌍 國際股市 <span class="tab-badge" style="background:var(--accent2)">NEW</span></div>
 </div>
 
 <!-- MAIN -->
@@ -1053,8 +1115,8 @@
 
 <!-- ===== PAGE: OVERVIEW ===== -->
 <div class="page active fade-in" id="page-overview">
-  <div class="grid-3 mb-4">
-    <div class="card">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;" id="overviewIndexGrid">
+    <div class="card" style="cursor:pointer;" onclick="switchTab('global')">
       <div class="card-header">
         <div class="card-title"><span class="icon">🇹🇼</span> 台灣加權指數</div>
       </div>
@@ -1062,21 +1124,30 @@
       <div class="index-change" id="twse-change">---</div>
       <svg class="sparkline" id="twse-spark" viewBox="0 0 200 50" preserveAspectRatio="none"></svg>
     </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title"><span class="icon">🇺🇸</span> S&P 500</div>
-      </div>
-      <div class="index-value" id="sp500-price">--,---</div>
-      <div class="index-change" id="sp500-change">---</div>
-      <svg class="sparkline" id="sp500-spark" viewBox="0 0 200 50" preserveAspectRatio="none"></svg>
-    </div>
-    <div class="card">
+    <div class="card" style="cursor:pointer;" onclick="switchTab('global')">
       <div class="card-header">
         <div class="card-title"><span class="icon">💱</span> USD/TWD</div>
       </div>
       <div class="index-value" id="usdtwd-price">--.-</div>
       <div class="index-change" id="usdtwd-change">---</div>
       <svg class="sparkline" id="usdtwd-spark" viewBox="0 0 200 50" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="switchTab('global')">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">😱</span> VIX 恐慌指數</div>
+      </div>
+      <div class="index-value" id="vix-price" style="font-size:28px;">--</div>
+      <div class="index-change" id="vix-change">---</div>
+      <svg class="sparkline" id="vix-spark" viewBox="0 0 200 50" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card" style="cursor:pointer;" onclick="switchTab('global')">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🌍</span> 國際指數</div>
+        <span style="font-size:10px;color:var(--accent);">→ 點擊查看</span>
+      </div>
+      <div id="miniGlobalSummary" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:12px;">
+        <div style="color:var(--text-dim);">載入中...</div>
+      </div>
     </div>
   </div>
 
@@ -1271,6 +1342,26 @@
       <div class="card mb-4">
         <div class="card-title" style="margin-bottom:14px;"><span class="icon">🍩</span> 持股比例</div>
         <div id="pieChartContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+
+      <!-- 情境模擬 -->
+      <div class="card mb-4" style="border:1px solid var(--accent2);">
+        <div class="section-header" style="margin-bottom:12px;">
+          <div class="card-title" style="margin:0;font-size:13px;"><span class="icon">🎯</span> 情境模擬</div>
+          <span class="api-cost-badge" style="border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.1);color:var(--accent2);">🤖 ≈0.08₮</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">模擬特定事件對持股組合的影響</div>
+        <select id="scenarioSelect" style="width:100%;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px;border-radius:6px;font-size:12px;">
+          <option value="">選擇情境...</option>
+          <option value="fed_cut">Fed 降息 1碼</option>
+          <option value="usd_drop">美元走弱 5%</option>
+          <option value="china_risk">中國地緣風險升溫</option>
+          <option value="ai_boom">AI需求超預期爆發</option>
+          <option value="recession">全球衰退疑慮升溫</option>
+          <option value="tariff">美國對台加關稅</option>
+        </select>
+        <button class="btn" style="width:100%;background:var(--accent2);border-color:var(--accent2);" onclick="runScenario()">▶ 模擬分析</button>
+        <div id="scenarioResult" style="margin-top:10px;display:none;"></div>
       </div>
     </div>
   </div>
@@ -1530,6 +1621,28 @@
 
 <!-- ===== PAGE: SCREENER ===== -->
 <div class="page fade-in" id="page-screener">
+  <!-- ✨ AI 自然語言選股 -->
+  <div class="card mb-4" style="border:1px solid var(--accent2);background:linear-gradient(135deg,var(--surface) 0%,rgba(124,58,237,0.06) 100%);">
+    <div class="section-header">
+      <div class="section-title" style="color:var(--accent2);">🔮 AI 自然語言選股</div>
+      <span class="api-cost-badge" style="border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.1);color:var(--accent2);">🤖 ≈0.10 TWD/次</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);margin:8px 0 12px;">用中文描述你的選股條件，AI 自動從自選股和快取股票中篩選</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <input type="text" id="nlScreenerInput" placeholder="例如：殖利率大於5%且本益比合理的金融股、AI概念的半導體外資買超..."
+        style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter')runNLScreener()">
+      <button class="btn" style="background:var(--accent2);" onclick="runNLScreener()">🔮 AI篩選</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="filter-chip" onclick="setNLScreener('高殖利率且本益比低的金融股')">高息金融</button>
+      <button class="filter-chip" onclick="setNLScreener('AI半導體且外資持續買超')">AI半導外資買</button>
+      <button class="filter-chip" onclick="setNLScreener('今日強勢上漲且成交量放大')">強勢量增</button>
+      <button class="filter-chip" onclick="setNLScreener('低本益比高殖利率傳產股')">低PE傳產</button>
+      <button class="filter-chip" onclick="setNLScreener('殖利率超過6%的電信或公用事業')">超高息公用</button>
+    </div>
+    <div id="nlScreenerResult" style="margin-top:12px;display:none;"></div>
+  </div>
+
   <!-- 快速篩選 Tag -->
   <div class="card mb-4">
     <div class="section-header">
@@ -1671,6 +1784,141 @@
 </div>
 
 
+
+
+<!-- ===== PAGE: GLOBAL MARKETS ===== -->
+<div class="page fade-in" id="page-global">
+  <!-- 國際股市橫幅 -->
+  <div class="notice-bar">🌍 國際股市即時資料，透過多重備援（Yahoo Finance + Stooq）自動更新。點擊各指數卡片可查看詳情。</div>
+
+  <!-- 主要指數 -->
+  <div style="font-size:13px;font-weight:700;color:var(--accent);margin:0 0 10px;">🇺🇸 美股</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;" id="usIndicesGrid">
+    <div class="card global-idx-card" data-sym="^GSPC" onclick="showGlobalDetail('^GSPC')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇺🇸 S&P 500</div>
+      <div class="global-price" id="g-^GSPC-price">--</div>
+      <div class="global-change" id="g-^GSPC-change">--</div>
+      <svg class="sparkline" id="g-^GSPC-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^IXIC" onclick="showGlobalDetail('^IXIC')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💻 NASDAQ</div>
+      <div class="global-price" id="g-^IXIC-price">--</div>
+      <div class="global-change" id="g-^IXIC-change">--</div>
+      <svg class="sparkline" id="g-^IXIC-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^DJI" onclick="showGlobalDetail('^DJI')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🏭 道瓊 DJI</div>
+      <div class="global-price" id="g-^DJI-price">--</div>
+      <div class="global-change" id="g-^DJI-change">--</div>
+      <svg class="sparkline" id="g-^DJI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^SOX" onclick="showGlobalDetail('^SOX')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🔬 費半 SOX</div>
+      <div class="global-price" id="g-^SOX-price">--</div>
+      <div class="global-change" id="g-^SOX-change">--</div>
+      <svg class="sparkline" id="g-^SOX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <div style="font-size:13px;font-weight:700;color:var(--accent);margin:0 0 10px;">🌏 亞太股市</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;" id="asiaIndicesGrid">
+    <div class="card global-idx-card" data-sym="^N225" onclick="showGlobalDetail('^N225')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇯🇵 日經 225</div>
+      <div class="global-price" id="g-^N225-price">--</div>
+      <div class="global-change" id="g-^N225-change">--</div>
+      <svg class="sparkline" id="g-^N225-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^HSI" onclick="showGlobalDetail('^HSI')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇭🇰 恆生指數</div>
+      <div class="global-price" id="g-^HSI-price">--</div>
+      <div class="global-change" id="g-^HSI-change">--</div>
+      <svg class="sparkline" id="g-^HSI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="000001.SS" onclick="showGlobalDetail('000001.SS')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇨🇳 上証指數</div>
+      <div class="global-price" id="g-000001.SS-price">--</div>
+      <div class="global-change" id="g-000001.SS-change">--</div>
+      <svg class="sparkline" id="g-000001.SS-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^KS11" onclick="showGlobalDetail('^KS11')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇰🇷 韓國 KOSPI</div>
+      <div class="global-price" id="g-^KS11-price">--</div>
+      <div class="global-change" id="g-^KS11-change">--</div>
+      <svg class="sparkline" id="g-^KS11-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <div style="font-size:13px;font-weight:700;color:var(--accent);margin:0 0 10px;">🌍 歐洲 & 商品</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="card global-idx-card" data-sym="^GDAXI" onclick="showGlobalDetail('^GDAXI')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇩🇪 德DAX</div>
+      <div class="global-price" id="g-^GDAXI-price">--</div>
+      <div class="global-change" id="g-^GDAXI-change">--</div>
+      <svg class="sparkline" id="g-^GDAXI-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^FTSE" onclick="showGlobalDetail('^FTSE')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🇬🇧 英FTSE 100</div>
+      <div class="global-price" id="g-^FTSE-price">--</div>
+      <div class="global-change" id="g-^FTSE-change">--</div>
+      <svg class="sparkline" id="g-^FTSE-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="GC=F" onclick="showGlobalDetail('GC=F')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🥇 黃金 (USD/oz)</div>
+      <div class="global-price" id="g-GC=F-price">--</div>
+      <div class="global-change" id="g-GC=F-change">--</div>
+      <svg class="sparkline" id="g-GC=F-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="CL=F" onclick="showGlobalDetail('CL=F')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🛢️ 原油 WTI</div>
+      <div class="global-price" id="g-CL=F-price">--</div>
+      <div class="global-change" id="g-CL=F-change">--</div>
+      <svg class="sparkline" id="g-CL=F-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <!-- 恐慌/利率 -->
+  <div style="font-size:13px;font-weight:700;color:var(--accent);margin:0 0 10px;">📊 市場情緒 & 利率</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="card global-idx-card" data-sym="^VIX" onclick="showGlobalDetail('^VIX')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">😱 VIX 恐慌</div>
+      <div class="global-price" id="g-^VIX-price">--</div>
+      <div class="global-change" id="g-^VIX-change">--</div>
+      <svg class="sparkline" id="g-^VIX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="^TNX" onclick="showGlobalDetail('^TNX')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">🏦 美10年債殖利率</div>
+      <div class="global-price" id="g-^TNX-price">--</div>
+      <div class="global-change" id="g-^TNX-change">--</div>
+      <svg class="sparkline" id="g-^TNX-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="DX-Y.NYB" onclick="showGlobalDetail('DX-Y.NYB')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💵 美元指數 DXY</div>
+      <div class="global-price" id="g-DX-Y.NYB-price">--</div>
+      <div class="global-change" id="g-DX-Y.NYB-change">--</div>
+      <svg class="sparkline" id="g-DX-Y.NYB-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card global-idx-card" data-sym="USDJPY=X" onclick="showGlobalDetail('USDJPY=X')">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">💴 USD/JPY 日圓</div>
+      <div class="global-price" id="g-USDJPY=X-price">--</div>
+      <div class="global-change" id="g-USDJPY=X-change">--</div>
+      <svg class="sparkline" id="g-USDJPY=X-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <!-- AI 市場解讀 -->
+  <div class="card">
+    <div class="section-header">
+      <div class="section-title">🤖 AI 全球市場解讀</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="api-cost-badge" data-tip="約消耗 800 tokens，≈0.08 TWD">🤖 ≈0.08 TWD/次</span>
+        <button class="btn" onclick="runGlobalAI()">分析市場</button>
+      </div>
+    </div>
+    <div id="globalAIResult" style="padding:16px;color:var(--text-dim);font-size:13px;text-align:center;">
+      點擊「分析市場」讓 AI 解讀當前全球股市走向及對台股的影響
+    </div>
+  </div>
+</div>
 
 
 <!-- ===== PAGE: FUNDAMENTALS ===== -->
@@ -1917,8 +2165,19 @@
 
     </div>
 
-    <!-- 右側：設定與說明 -->
+    <!-- 右側：設定、說明、相關性分析 -->
     <div>
+      <!-- AI 相關性分析 -->
+      <div class="card mb-4" style="border-color:var(--accent2);">
+        <div class="section-header">
+          <div class="card-title" style="margin:0;"><span class="icon">🔗</span> AI 關聯股票分析</div>
+          <span class="api-cost-badge">🤖 ≈0.10₮</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">找出與此股票走勢最相關的台股和美股</div>
+        <button class="btn" style="width:100%;" onclick="runCorrelationAnalysis()">🔗 分析關聯性</button>
+        <div id="correlationResult" style="margin-top:12px;"></div>
+      </div>
+
       <div class="card mb-4">
         <div class="card-title" style="margin-bottom:14px;"><span class="icon">⚙️</span> 分析參數</div>
         <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">納入分析的資料來源：</div>
@@ -2315,7 +2574,7 @@ async function fetchYahooData() {
 
   // 備援：直接從 allorigins 取 Yahoo v7（無 Worker）
   const tryFallback = async () => {
-    const sym = encodeURIComponent('^GSPC,^IXIC,USDTWD=X,^SOX,^VIX,^TNX,GC=F,CL=F');
+    const sym = encodeURIComponent('^IXIC,USDTWD=X,^SOX,^VIX,^TNX,GC=F,CL=F,DX-Y.NYB');
     const url  = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}`;
     const res  = await fetch(
       `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
@@ -2345,41 +2604,17 @@ async function fetchYahooData() {
       try { result = await tryFallback(); }
       catch(e2) { result = {}; }
     }
-    // 若 SP500 仍缺，直接從 Stooq 抓（透過 allorigins 代理）
-    if (!result['^GSPC'] || result['^GSPC'].price <= 0) {
-      try {
-        const sr = await fetch(
-          `https://api.allorigins.win/get?url=${encodeURIComponent('https://stooq.com/q/d/l/?s=spx&i=d&l=3')}`,
-          { signal: AbortSignal.timeout(8000) }
-        );
-        const so = await sr.json();
-        const csv = so.contents || '';
-        const lines = csv.trim().split('\n').filter(l=>l&&!l.startsWith('Date')&&!l.includes('No data'));
-        if (lines.length >= 2) {
-          const last  = lines[lines.length-1].split(',');
-          const prev2 = lines[lines.length-2].split(',');
-          const close = parseFloat(last[4]) || 0;
-          const prevC = parseFloat(prev2[4]) || close;
-          if (close > 0) {
-            const ch = +(close - prevC).toFixed(2);
-            const pct = prevC > 0 ? +((ch/prevC)*100).toFixed(2) : 0;
-            result['^GSPC'] = { name:'S&P 500', price:close, change:ch, changePct:pct, prev:prevC, src:'stooq' };
-            console.log('SP500 from Stooq (allorigins):', close);
-          }
-        }
-      } catch(es) { console.warn('Stooq SP500 fallback failed:', es.message); }
-    }
+    // SP500 已移至國際股市頁，此處不需備援
     state.yahooData = result;
     updateMacroCards();
     updateOverviewCards();
   } catch(e) {
     console.warn('All Yahoo sources failed:', e.message);
-    document.getElementById('sp500-price').textContent  = '---';
-    document.getElementById('usdtwd-price').textContent = '--.-';
-    document.getElementById('sp500-change').innerHTML   =
-      `<span style="font-size:10px;color:var(--gold);">⚠️ 無法載入（${e.message.slice(0,30)}）</span>`;
-    document.getElementById('usdtwd-change').innerHTML  =
-      `<span style="font-size:10px;color:var(--gold);">請確認 Worker 設定</span>`;
+    const uEl = document.getElementById('usdtwd-price');
+    const ucEl = document.getElementById('usdtwd-change');
+    if (uEl) uEl.textContent = '--.-';
+    if (ucEl) ucEl.innerHTML = `<span style="font-size:10px;color:var(--gold);">請確認 Worker 設定</span>`;
+    console.warn('Yahoo data failed:', e.message);
   }
 }
 
@@ -2573,7 +2808,112 @@ function initTheme() {
 }
 
 
-function switchTab(tab) {
+// ============================================================
+// 國際股市頁面
+// ============================================================
+const GLOBAL_SYMBOLS = [
+  '^GSPC','^IXIC','^DJI','^SOX','^N225','^HSI','000001.SS','^KS11',
+  '^GDAXI','^FTSE','GC=F','CL=F','^VIX','^TNX','DX-Y.NYB','USDJPY=X',
+  'USDTWD=X',
+];
+
+const GLOBAL_SYM_EXTRA = '^N225,^HSI,000001.SS,^KS11,^GDAXI,^FTSE';
+
+let _globalLoaded = false;
+async function ensureGlobalData() {
+  if (_globalLoaded) return;
+  // 額外抓亞太+歐洲 (不在預設 YAHOO_SYMBOLS 裡)
+  if (!WORKER_URL) return;
+  try {
+    const all = GLOBAL_SYMBOLS.join(',');
+    const res = await fetch(`${WORKER_URL}?type=yahoo&symbols=${encodeURIComponent(all)}`,
+      { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.result) {
+      Object.assign(state.yahooData, data.result);
+      _globalLoaded = true;
+    }
+  } catch(e) { console.warn('Global data fetch failed:', e.message); }
+}
+
+function renderGlobalPage() {
+  GLOBAL_SYMBOLS.forEach(sym => {
+    const d  = state.yahooData[sym];
+    const pfx = 'g-' + sym + '-';
+    const pEl = document.getElementById(pfx + 'price');
+    const cEl = document.getElementById(pfx + 'change');
+    const sEl = document.getElementById(pfx + 'spark');
+    if (!pEl || !d || !d.price) return;
+    const up   = d.changePct >= 0;
+    const sign = up ? '+' : '';
+    const col  = up ? 'var(--green)' : 'var(--red)';
+
+    // 自動格式：大數字加逗號，小數字保留小數點
+    let priceStr;
+    if (d.price >= 1000) priceStr = d.price.toLocaleString('zh-TW', {maximumFractionDigits:2});
+    else if (d.price >= 100) priceStr = d.price.toFixed(2);
+    else priceStr = d.price.toFixed(3);
+
+    pEl.textContent  = priceStr;
+    pEl.style.color  = col;
+    cEl.innerHTML    = `<span style="color:${col};">${sign}${d.changePct.toFixed(2)}% <span style="color:var(--text-dim);font-size:10px;">(${sign}${d.change?.toFixed(2)||'--'})</span></span>`;
+    if (sEl) {
+      const lo = d.price * (1 - Math.abs(d.changePct)/100 * 3);
+      const hi = d.price * (1 + Math.abs(d.changePct)/100 * 3);
+      renderSparkline(pfx + 'spark', randomWalkData(20, lo, hi), up);
+    }
+  });
+  // 更新 miniGlobal
+  updateMiniGlobal();
+}
+
+function showGlobalDetail(sym) {
+  const d = state.yahooData[sym];
+  const names = {
+    '^GSPC':'S&P 500','^IXIC':'NASDAQ','^DJI':'道瓊工業','^SOX':'費城半導體',
+    '^N225':'日經225','^HSI':'恆生指數','000001.SS':'上証指數','^KS11':'韓國KOSPI',
+    '^GDAXI':'德國DAX','^FTSE':'英FTSE 100','GC=F':'黃金期貨','CL=F':'原油WTI',
+    '^VIX':'VIX恐慌指數','^TNX':'美10年債殖利率','DX-Y.NYB':'美元指數DXY',
+    'USDJPY=X':'美元/日圓','USDTWD=X':'美元/台幣',
+  };
+  if (!d) { showToast('資料載入中，請稍後'); return; }
+  quickChat(`分析 ${names[sym]||sym} 目前走勢，現價 ${d.price?.toFixed(2)} 漲跌 ${d.changePct?.toFixed(2)}%，對台股有何影響？`);
+}
+
+async function runGlobalAI() {
+  const result = document.getElementById('globalAIResult');
+  result.innerHTML = '<div class="loading"><div class="spinner"></div> AI 分析中...</div>';
+  trackApiUsage('global', 800);
+  trackAiUsage('global');
+
+  const indices = [
+    ['^GSPC','S&P500'],['^IXIC','NASDAQ'],['^DJI','道瓊'],['^SOX','費半'],
+    ['^N225','日經'],['^HSI','恆生'],['^VIX','VIX'],['^TNX','美債利率'],
+    ['GC=F','黃金'],['CL=F','原油'],['USDTWD=X','美元台幣'],
+  ].map(([sym,label])=>{
+    const d = state.yahooData[sym];
+    if (!d || !d.price) return null;
+    const sign = d.changePct>=0?'+':'';
+    return `${label}:${d.price.toFixed(1)}(${sign}${d.changePct.toFixed(2)}%)`;
+  }).filter(Boolean).join(' | ');
+
+  const prompt = `你是台灣股市AI分析師，根據以下國際市場數據，用繁體中文撰寫300字以內的分析：
+市場數據：${indices}
+請包含：1)美股走勢 2)亞太市場 3)商品/匯率信號 4)對台股明日走勢的預測與建議`;
+
+  try {
+    const reply = await callClaude([{ role:'user', content:prompt }], 800);
+    result.innerHTML = `<div style="line-height:1.8;font-size:13px;">${reply.replace(/\n/g,'<br>')}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right;">
+        分析時間：${new Date().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})}
+      </div>`;
+  } catch(e) {
+    result.innerHTML = `<div style="color:var(--red);">❌ 分析失敗：${e.message}</div>`;
+  }
+}
+
+
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   event.target.classList.add('active');
@@ -2583,6 +2923,8 @@ function switchTab(tab) {
   if (tab === 'potential') { /* 等使用者點擊分析 */ }
   // 切到趨勢頁初始化
   if (tab === 'trend') initTrendPage();
+  // 切到國際股市
+  if (tab === 'global') ensureGlobalData().then(() => setTimeout(renderGlobalPage, 200));
 }
 
 // ============================================================
@@ -2639,9 +2981,6 @@ function renderOverview() {
   if (Object.keys(state.yahooData).length > 0) {
     updateOverviewCards();
   } else {
-    document.getElementById('sp500-price').textContent = '--';
-    document.getElementById('sp500-change').innerHTML  = '<span class="text-dim" style="font-size:12px;">載入中…</span>';
-    renderSparkline('sp500-spark', randomWalkData(20, 5700, 5900), true);
     document.getElementById('usdtwd-price').textContent = '--';
     document.getElementById('usdtwd-change').innerHTML  = '<span class="text-dim" style="font-size:12px;">載入中…</span>';
     renderSparkline('usdtwd-spark', randomWalkData(20, 31.8, 32.4), false);
@@ -3314,7 +3653,6 @@ function renderMacro() {
 const YAHOO_MAP = {
   '^DJI'    :['dji','dji-ch'],
   '^IXIC'   :['ixic','ixic-ch'],
-  '^GSPC'   :['spx','spx-ch'],
   '^SOX'    :['sox','sox-ch'],
   'USDTWD=X':['usdtwd2','usdtwd2-ch'],
   'USDJPY=X':['usdjpy','usdjpy-ch'],
@@ -3341,26 +3679,49 @@ function updateMacroCards() {
 }
 
 function updateOverviewCards() {
-  // 同時更新趨勢頁橫幅（若已載入）
   if (document.getElementById('mtrend-twse')) setTimeout(updateMarketTrendBanner, 100);
-  // S&P 500
-  const sp = state.yahooData['^GSPC'];
-  if(sp){
-    const isUp=sp.changePct>=0; const sign=isUp?'+':'';
-    document.getElementById('sp500-price').textContent = sp.price.toLocaleString();
-    document.getElementById('sp500-change').innerHTML  =
-      `<span class="${isUp?'up':'down'}">${sign}${sp.change.toFixed(2)} (${sign}${sp.changePct.toFixed(2)}%)</span>`;
-    renderSparkline('sp500-spark', randomWalkData(20, sp.price*0.985, sp.price*1.015), isUp);
-  }
   // USD/TWD
   const twd = state.yahooData['USDTWD=X'];
-  if(twd){
+  if(twd && twd.price > 0){
     const isUp=twd.changePct>=0; const sign=isUp?'+':'';
     document.getElementById('usdtwd-price').textContent = twd.price.toFixed(2);
     document.getElementById('usdtwd-change').innerHTML  =
       `<span class="${isUp?'up':'down'}">${sign}${twd.change.toFixed(2)} (${sign}${twd.changePct.toFixed(2)}%)</span>`;
     renderSparkline('usdtwd-spark', randomWalkData(20, twd.price*0.996, twd.price*1.004), isUp);
   }
+  // VIX
+  const vix = state.yahooData['^VIX'];
+  if(vix && vix.price > 0){
+    const isUp=vix.changePct>=0;
+    const vixColor = vix.price>30?'var(--red)':vix.price>20?'var(--gold)':'var(--green)';
+    document.getElementById('vix-price').textContent = vix.price.toFixed(2);
+    document.getElementById('vix-price').style.color = vixColor;
+    document.getElementById('vix-change').innerHTML  =
+      `<span style="color:${vixColor};font-size:12px;">${isUp?'+':''}${vix.changePct.toFixed(2)}% · ${vix.price>30?'高恐慌':vix.price>20?'謹慎':'平穩'}</span>`;
+    renderSparkline('vix-spark', randomWalkData(20, vix.price*0.9, vix.price*1.1), !isUp);
+  }
+  // 國際指數縮圖
+  updateMiniGlobal();
+  // 更新國際股市頁
+  if(document.getElementById('page-global')?.classList.contains('active')) renderGlobalPage();
+}
+
+function updateMiniGlobal() {
+  const mini = document.getElementById('miniGlobalSummary');
+  if(!mini) return;
+  const indices = [
+    ['^GSPC','S&P 500'],['^IXIC','NASDAQ'],['^DJI','道瓊'],['^N225','日經225'],
+  ];
+  const rows = indices.map(([sym, label])=>{
+    const d = state.yahooData[sym];
+    if(!d||!d.price) return '';
+    const up = d.changePct>=0;
+    return `<div style="display:flex;justify-content:space-between;">
+      <span style="color:var(--text-dim);">${label}</span>
+      <span style="color:${up?'var(--green)':'var(--red)'};font-family:'Space Mono',monospace;font-size:11px;">${up?'+':''}${d.changePct.toFixed(2)}%</span>
+    </div>`;
+  }).filter(Boolean);
+  mini.innerHTML = rows.length ? rows.join('') : '<div style="color:var(--text-dim);">點擊查看國際股市 →</div>';
 }
 
 function showMacroNote(msg) {
@@ -4557,160 +4918,204 @@ async function loadFundamentals(inputCode) {
   }
 }
 
+// ============================================================
+// 基本面頁面完整渲染 (v4 WantGoo風格 - 圖表 + 完整數據)
+// ============================================================
 function renderFundamentals(code, name, price, changePct, data) {
   const container = document.getElementById('fundResult');
   if (!container) return;
 
-  const d  = data.quote   || {};   // Yahoo quote
-  const hy = data.history || [];   // 配息歷史 (Yahoo dividends)
-  const bw = data.bwibbu  || {};   // TWSE 本益比/殖利率
+  const d  = data.quote   || {};
+  const hy = data.history || [];   // Yahoo Chart dividends (按日期降序)
+  const bw = data.bwibbu  || {};   // TWSE BWIBBU_d 補充
 
-  // 估值指標（優先 Yahoo，備援 TWSE，最後快取）
-  const pe     = d.pe      ?? bw.pe    ?? (state.stockCache[code]?.pe   || '--');
-  const pb     = d.pb      ?? bw.pb    ?? '--';
-  const yld    = d.yield   ?? bw.yield ?? (state.stockCache[code]?.yield || '--');
-  const mktCap = d.mktCap  || null;
-  const eps    = d.eps     || null;
-  const roe    = d.roe     || null;
+  // ── 估值數據取值邏輯 ──────────────────────────────────────
+  // PE: Yahoo 通常正確；TWSE 備援
+  const pe   = (d.pe  != null && d.pe  > 0 && d.pe  < 500) ? +d.pe.toFixed(2)  : (bw.pe  || null);
+  // PB: Yahoo 的 priceToBook 對台股常返回每股帳面值而非比率
+  //     Worker 已過濾 >20 的異常值；TWSE BWIBBU_d 的 pb 最可靠
+  const pb   = (bw.pb != null && bw.pb > 0 && bw.pb < 30)  ? +bw.pb.toFixed(2)
+             : (d.pb  != null && d.pb  > 0 && d.pb  < 20)  ? +d.pb.toFixed(2)  : null;
+  // Yield: Yahoo (已乘100) or TWSE
+  const yld  = (d.yield != null && d.yield > 0) ? +d.yield.toFixed(2) : (bw.yield || null);
+  const eps    = (d.eps  != null) ? +d.eps.toFixed(2)  : null;
+  const roe    = (d.roe  != null) ? +d.roe.toFixed(1)  : null;
+  const mktCap = d.mktCap || null;
+  const beta   = (d.beta != null) ? +d.beta.toFixed(2) : null;
+  const h52w   = d.high52w || null;
+  const l52w   = d.low52w  || null;
+  const nextEx = d.nextExDiv || null;
 
-  // 配息統計
-  const recent5 = hy.slice(0, 5);
-  const avgDiv  = recent5.length
-    ? (recent5.reduce((a, b) => a + (b.amount || 0), 0) / recent5.length).toFixed(2) : '--';
+  // ── 顏色與評估標籤 ─────────────────────────────────────────
+  const peNum  = pe   != null ? pe   : NaN;
+  const pbNum  = pb   != null ? pb   : NaN;
+  const yldNum = yld  != null ? yld  : NaN;
 
-  // 填息判斷（price上漲 = 填息；需要歷史股價才能精確，這裡用簡單邏輯）
-  const fillCount = hy.filter(h => h.filled === true).length;
-  const fillTotal = hy.filter(h => h.filled !== undefined).length;
-  const fillRate  = fillTotal > 0 ? `${fillCount}/${fillTotal} 次填息` : '待計算';
+  const peColor  = !isNaN(peNum)  ? (peNum<12?'var(--green)':peNum<20?'var(--gold)':'var(--red)')  : 'var(--text-dim)';
+  const pbColor  = !isNaN(pbNum)  ? (pbNum<1.5?'var(--green)':pbNum<3?'var(--gold)':'var(--red)')  : 'var(--text-dim)';
+  const yldColor = !isNaN(yldNum) ? (yldNum>=5?'var(--green)':yldNum>=3?'var(--gold)':'var(--text-dim)') : 'var(--text-dim)';
+  const roeColor = roe != null    ? (roe>=15?'var(--green)':roe>=10?'var(--gold)':'var(--text-dim)') : 'var(--text-dim)';
 
-  // 下次除息
-  const nextEx  = d.nextExDiv || null;
+  const peLabel  = !isNaN(peNum)  ? (peNum<12?'低估':peNum<20?'合理':peNum<30?'略高':'偏貴')   : null;
+  const pbLabel  = !isNaN(pbNum)  ? (pbNum<1?'折價':pbNum<2?'合理':pbNum<4?'溢價':'高溢價')    : null;
+  const yldLabel = !isNaN(yldNum) ? (yldNum>=5?'高息':yldNum>=3?'普通':'低息')                  : null;
+  const roeLabel = roe != null    ? (roe>=15?'優異':roe>=10?'良好':roe>=6?'普通':'偏低')         : null;
 
-  // 漲跌色
-  const pc      = price > 0 ? changePct : 0;
-  const pCls    = pc >= 0 ? 'up' : 'down';
-  const pSign   = pc >= 0 ? '+' : '';
+  // ── 配息統計 ───────────────────────────────────────────────
+  const recent5  = hy.slice(0, 5);
+  const avgDiv   = recent5.length ? (recent5.reduce((s,h)=>s+(h.amount||0),0)/recent5.length) : null;
+  const maxDiv   = hy.length ? Math.max(...hy.map(h=>h.amount||0)) : 1;
+  const divCount = hy.length;
 
-  // PE 評估
-  const peNum   = parseFloat(pe);
-  const peColor = !isNaN(peNum) ? (peNum < 15 ? 'var(--green)' : peNum < 25 ? 'var(--gold)' : 'var(--red)') : 'var(--text-dim)';
-  const peLabel = !isNaN(peNum) ? (peNum < 15 ? '低估值' : peNum < 25 ? '合理' : '偏高') : '--';
+  // ── 52週位置 ───────────────────────────────────────────────
+  const pct52w = (h52w && l52w && price > 0 && h52w > l52w)
+    ? ((price - l52w) / (h52w - l52w) * 100).toFixed(0) : null;
 
-  const pbNum   = parseFloat(pb);
-  const pbColor = !isNaN(pbNum) ? (pbNum < 1.5 ? 'var(--green)' : pbNum < 3 ? 'var(--gold)' : 'var(--red)') : 'var(--text-dim)';
+  // ── 市值格式 ───────────────────────────────────────────────
+  const mktCapStr = mktCap
+    ? (mktCap >= 1e12 ? (mktCap/1e12).toFixed(2)+'兆' : mktCap >= 1e8 ? (mktCap/1e8).toFixed(0)+'億' : (mktCap/1e6).toFixed(0)+'百萬')
+    : null;
 
-  const yldNum  = parseFloat(yld);
-  const yldColor= !isNaN(yldNum) ? (yldNum >= 5 ? 'var(--green)' : yldNum >= 3 ? 'var(--gold)' : 'var(--text-dim)') : 'var(--text-dim)';
+  const pc    = price > 0 ? changePct : 0;
+  const pCls  = pc >= 0 ? 'up' : 'down';
+  const pSign = pc >= 0 ? '+' : '';
 
   container.innerHTML = `
-    <!-- 個股標頭 -->
-    <div class="card mb-4">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <!-- ① 股票標頭 -->
+    <div class="card mb-4" style="background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border-color:rgba(0,212,255,0.2);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
         <div>
-          <div style="font-size:22px;font-weight:700;">${name} <span class="stock-code" style="font-size:14px;">${code}</span></div>
-          ${price > 0 ? `<div style="font-size:18px;font-family:'Space Mono',monospace;margin-top:4px;">
-            ${price.toFixed(1)} <span class="${pCls}" style="font-size:14px;">${pSign}${pc.toFixed(2)}%</span>
-          </div>` : '<div style="color:var(--text-dim);font-size:13px;">非交易時段</div>'}
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+            <span style="font-size:26px;font-weight:700;letter-spacing:-0.5px;">${name}</span>
+            <span style="font-size:13px;font-family:'Space Mono',monospace;background:var(--surface2);
+              border:1px solid var(--border);padding:2px 10px;border-radius:20px;color:var(--text-dim);">${code}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span style="font-size:30px;font-weight:700;font-family:'Space Mono',monospace;
+              color:${pc>=0?'var(--green)':'var(--red)'};">${price > 0 ? price.toFixed(2) : '--'}</span>
+            ${price > 0 ? `<span class="${pCls}" style="font-size:16px;font-weight:600;">${pSign}${pc.toFixed(2)}%</span>` : ''}
+          </div>
+          ${pct52w !== null ? `
+          <div style="margin-top:14px;max-width:280px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:4px;">
+              <span>52週低 ${l52w?.toFixed(2)}</span>
+              <span>52週高 ${h52w?.toFixed(2)}</span>
+            </div>
+            <div class="week52-bar">
+              <div class="week52-fill" style="width:${pct52w}%;"></div>
+              <div class="week52-dot" style="left:${pct52w}%;"></div>
+            </div>
+            <div style="font-size:10px;color:var(--accent);text-align:center;">
+              現價位於 52週區間 ${pct52w}% 位置
+            </div>
+          </div>` : ''}
         </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-outline" onclick="quickChat('幫我深入分析 ${name}(${code}) 的基本面，包含本益比、殖利率評估和投資建議')">🤖 AI 深入分析</button>
-          <button class="btn-outline" onclick="switchTab('trend');setTimeout(()=>analyzeTrend('${code}'),300)">🔬 趨勢分析</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-start;">
+          <button class="btn-outline" onclick="quickChat('深入分析${name}(${code})，本益比${pe||'--'}、殖利率${yld||'--'}%，現在值得投資嗎？')">🤖 AI深析</button>
+          <button class="btn-outline" onclick="switchTab('trend');setTimeout(()=>analyzeTrend('${code}'),300)">🔬 趨勢</button>
+          <button class="btn-outline" onclick="setStockAlert('${code}',${price>0?price.toFixed(1):0})">🔔 警示</button>
         </div>
       </div>
     </div>
 
-    <!-- 核心估值 -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+    <!-- ② 核心估值 6格 (WantGoo-inspired) -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
       ${[
-        ['本益比 P/E', isNaN(peNum)?'--':peNum.toFixed(1), peColor, peLabel, '每股市價 ÷ 每股盈餘'],
-        ['股價淨值比 P/B', isNaN(pbNum)?'--':pbNum.toFixed(2), pbColor, pbNum<1.5?'折價':'溢價', '每股市價 ÷ 每股淨值'],
-        ['殖利率', isNaN(yldNum)?'--':yldNum.toFixed(2)+'%', yldColor, yldNum>=5?'高息':'一般', '年配息 ÷ 股價'],
-        ['EPS', eps ? eps.toFixed(2)+'元' : '--', 'var(--text)', '', '每股盈餘'],
-        ['市值', mktCap ? (mktCap>=1e12 ? (mktCap/1e12).toFixed(1)+'兆' : (mktCap/1e8).toFixed(0)+'億') : '--', 'var(--text)', '', '新台幣市值'],
-        ['ROE', roe ? roe.toFixed(1)+'%' : '--', roe>=15?'var(--green)':roe>=10?'var(--gold)':'var(--text-dim)', roe>=15?'優異':'', '股東權益報酬率'],
-      ].map(([label, val, color, sub, tip]) => `
-        <div style="background:var(--surface2);border-radius:12px;padding:14px;position:relative;" title="${tip}">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">${label}</div>
-          <div style="font-size:22px;font-weight:700;font-family:'Space Mono',monospace;color:${color};">${val}</div>
-          ${sub ? `<div style="font-size:10px;color:${color};margin-top:3px;">${sub}</div>` : ''}
+        {label:'本益比 P/E', val:pe!=null?pe.toFixed(1):'--', color:peColor, tag:peLabel, tip:'每股市價÷每股盈餘 越低越便宜'},
+        {label:'股價淨值比 P/B', val:pb!=null?pb.toFixed(2):'--', color:pbColor, tag:pbLabel, tip:'市價÷每股淨值（TWSE資料）'},
+        {label:'殖利率 Yield', val:yld!=null?yld.toFixed(2)+'%':'--', color:yldColor, tag:yldLabel, tip:'年配息÷現股價'},
+        {label:'EPS（元）', val:eps!=null?eps.toFixed(2):'--', color:'var(--text)', tag:null, tip:'每股稅後盈餘'},
+        {label:'市值', val:mktCapStr||'--', color:'var(--text)', tag:null, tip:'股本×現股價'},
+        {label:'ROE (%)', val:roe!=null?roe.toFixed(1)+'%':'--', color:roeColor, tag:roeLabel, tip:'股東權益報酬率'},
+      ].map(v=>`
+        <div class="fund-val-card" title="${v.tip}">
+          <div class="fund-val-label">${v.label}</div>
+          <div class="fund-val-number" style="color:${v.color};">${v.val}</div>
+          ${v.tag?`<div class="fund-val-tag" style="color:${v.color};">${v.tag}</div>`:''}
         </div>`).join('')}
     </div>
 
-    <!-- 下次除息 & 配息摘要 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-      <div style="background:var(--surface2);border-radius:12px;padding:16px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:12px;">📅 配息資訊</div>
-        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">近5年平均配息</span>
-            <span style="font-family:'Space Mono',monospace;font-weight:600;color:var(--gold);">${avgDiv !== '--' ? avgDiv + ' 元' : '--'}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">填息紀錄</span>
-            <span>${fillRate}</span>
-          </div>
-          ${nextEx ? `<div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">下次除息日</span>
-            <span style="color:var(--green);">${nextEx}</span>
-          </div>` : ''}
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">配息次數/年</span>
-            <span>${d.divFreq || '--'}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style="background:var(--surface2);border-radius:12px;padding:16px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:12px;">📊 投資評估</div>
-        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">估值水位</span>
-            <span style="color:${peColor};">${peLabel || '--'}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">52週高點</span>
-            <span>${d.high52w ? d.high52w.toFixed(1) : '--'}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">52週低點</span>
-            <span>${d.low52w ? d.low52w.toFixed(1) : '--'}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <span style="color:var(--text-dim);">Beta 值</span>
-            <span>${d.beta ? d.beta.toFixed(2) : '--'}</span>
-          </div>
-        </div>
-      </div>
+    <!-- ③ 補充指標列 -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">
+      ${[
+        ['Beta值', beta!=null?beta:'--', '系統性風險，<1低波動'],
+        ['下次除息', nextEx||'--', ''],
+        ['近5年均配', avgDiv!=null?avgDiv.toFixed(2)+'元':'--', ''],
+        ['配息次數', divCount>0?divCount+'筆(歷史)':'--', ''],
+      ].map(([l,v,t])=>`
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;" title="${t}">
+          <div style="font-size:10px;color:var(--text-dim);">${l}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:4px;font-family:'Space Mono',monospace;">${v}</div>
+        </div>`).join('')}
     </div>
 
-    <!-- 配息歷史表格 -->
+    <!-- ④ 歷年配息圖 + 表 -->
     <div class="card">
-      <div style="font-size:13px;font-weight:600;margin-bottom:12px;">📋 近期配息紀錄</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:14px;font-weight:700;">
+          <span class="icon">💰</span> 歷年配息紀錄
+          ${avgDiv ? `<span style="color:var(--gold);font-size:12px;margin-left:8px;">近${Math.min(5,hy.length)}年均 ${avgDiv.toFixed(2)}元</span>` : ''}
+        </div>
+        <div style="display:flex;gap:10px;font-size:11px;color:var(--text-dim);">
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:3px;"></span>現金股利</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--gold);border-radius:2px;margin-right:3px;"></span>股票股利</span>
+        </div>
+      </div>
+
       ${hy.length > 0 ? `
+      <!-- 橫條圖 (WantGoo風格) -->
+      <div style="overflow-x:auto;margin-bottom:20px;">
+        <div class="div-bar-wrap" style="min-width:${Math.min(hy.length,16)*40}px;">
+          ${hy.slice(0,16).reverse().map(h=>{
+            const pct = maxDiv > 0 ? Math.max((h.amount||0)/maxDiv*90, 4) : 4;
+            const barColor = h.type==='stock' ? 'var(--gold)' : 'var(--accent)';
+            return `<div class="div-bar-col">
+              <div class="div-bar-amt">${(h.amount||0).toFixed(2)}</div>
+              <div class="div-bar-body" style="height:${pct}%;background:${barColor};opacity:0.85;"></div>
+              <div class="div-bar-year">${h.year}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- 詳細表格 -->
       <div style="overflow-x:auto;">
-        <table class="stock-table" style="font-size:13px;">
-          <thead><tr>
-            <th>年份</th><th>除息日</th><th>股利（元）</th><th>類型</th>
-          </tr></thead>
+        <table class="stock-table" style="font-size:12px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;">除息年度</th>
+              <th>現金股利（元）</th>
+              <th>除息日</th>
+              <th>類型</th>
+            </tr>
+          </thead>
           <tbody>
-            ${hy.slice(0, 12).map(h => `
+            ${hy.slice(0,16).map(h=>`
               <tr>
-                <td>${h.year || '--'}</td>
-                <td style="font-size:12px;color:var(--text-dim);">${h.date || '--'}</td>
-                <td class="price" style="font-weight:700;color:var(--gold);">${typeof h.amount === 'number' ? h.amount.toFixed(4) : '--'}</td>
-                <td><span class="tag tag-${h.type==='stock'?'gold':'green'}" style="font-size:10px;">${h.type==='stock'?'股票股利':'現金股利'}</span></td>
+                <td style="font-weight:700;">${h.year}</td>
+                <td style="font-family:'Space Mono',monospace;font-weight:700;color:var(--gold);text-align:right;">${typeof h.amount==='number'?h.amount.toFixed(4):'--'}</td>
+                <td style="font-size:11px;color:var(--text-dim);">${h.date||'--'}</td>
+                <td><span class="tag ${h.type==='stock'?'tag-gold':'tag-green'}" style="font-size:10px;">${h.type==='stock'?'股票':'現金'}</span></td>
               </tr>`).join('')}
           </tbody>
         </table>
-      </div>` : `<div style="text-align:center;padding:30px;color:var(--text-dim);">
-        <div style="font-size:24px;margin-bottom:8px;">📭</div>
-        <div>此股票暫無配息紀錄（可能為成長股或資料待更新）</div>
+      </div>
+      ` : `
+      <div style="text-align:center;padding:40px;color:var(--text-dim);">
+        <div style="font-size:32px;margin-bottom:8px;">📭</div>
+        <div>此股票目前無配息紀錄（成長型或資料待更新）</div>
       </div>`}
-      <div style="font-size:10px;color:var(--text-muted);margin-top:12px;text-align:right;">
-        資料來源：Yahoo Finance (${code}.TW) ｜ ${new Date().toLocaleDateString('zh-TW')}
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="font-size:10px;color:var(--text-muted);">資料來源：Yahoo Finance (${code}.TW) ｜ 台灣證交所 ｜ ${new Date().toLocaleDateString('zh-TW')}</div>
+        <button class="btn-outline" style="font-size:11px;padding:3px 10px;"
+          onclick="quickChat('分析${name}(${code})的配息政策，近年殖利率${yld||'--'}%，歷年配息趨勢如何？值得長期持有嗎？')">
+          🤖 AI 配息分析
+        </button>
       </div>
     </div>`;
 }
+
 
 async function callClaudeForTrend(prompt) {
   trackApiUsage('trend', 1400);
@@ -4949,14 +5354,219 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // ============================================================
+
+// ============================================================
+// 🔮 AI 自然語言選股
+// ============================================================
+function setNLScreener(text) {
+  const el = document.getElementById('nlScreenerInput');
+  if (el) { el.value = text; runNLScreener(); }
+}
+
+async function runNLScreener(preset) {
+  const input = preset || document.getElementById('nlScreenerInput')?.value?.trim();
+  if (!input) { showToast('請輸入選股條件'); return; }
+  if (preset) document.getElementById('nlScreenerInput').value = preset;
+
+  const resultEl = document.getElementById('nlScreenerResult');
+  resultEl.style.display = '';
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> AI 篩選中...</div>';
+
+  trackApiUsage('screener', 1000);
+  trackAiUsage('screener');
+
+  // 收集所有已知股票資料
+  const stocks = Object.entries(state.stockCache).map(([code, s]) => ({
+    code, name: s.name || STOCK_NAMES[code] || code,
+    price: s.price || 0, changePct: s.changePct || 0,
+    pe: s.pe || '--', yield: s.yield || '--',
+    sector: s.sector || '',
+  })).filter(s => s.price > 0).slice(0, 80);
+
+  const stockList = stocks.map(s =>
+    `${s.code} ${s.name} | 現價:${s.price} | 漲跌:${s.changePct}% | PE:${s.pe} | 殖利率:${s.yield}% | 類股:${s.sector}`
+  ).join('\n');
+
+  const prompt = `你是台股選股助理。用戶條件：「${input}」
+已知股票清單：
+${stockList}
+
+請從以上股票中篩選符合條件的，並依符合度排序，最多10支。
+回傳 JSON：{"stocks":[{"code":"代號","name":"名稱","reason":"符合原因一句話","score":90}],"summary":"篩選說明30字"}
+不符合的就不列。JSON外不要任何文字。`;
+
+  try {
+    const raw = await callClaude([{ role:'user', content: prompt }], 1000);
+    const json = raw.match(/\{[\s\S]*\}/)?.[0];
+    if (!json) throw new Error('格式異常');
+    const result = JSON.parse(json);
+
+    const items = (result.stocks || []);
+    resultEl.innerHTML = `
+      <div style="background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;">
+        🔮 ${result.summary || ''}　共找到 <strong>${items.length}</strong> 支符合條件
+      </div>
+      ${items.map(s => {
+        const cached = state.stockCache[s.code] || {};
+        const pc = cached.changePct || 0;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface2);border-radius:8px;margin-bottom:6px;">
+          <div style="font-family:'Space Mono',monospace;font-weight:700;min-width:44px;">${s.code}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">${s.name}</div>
+            <div style="font-size:11px;color:var(--text-dim);">${s.reason}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;font-family:'Space Mono',monospace;">${cached.price?.toFixed(2)||'--'}</div>
+            <div style="font-size:11px;" class="${pc>=0?'up':'down'}">${pc>=0?'+':''}${pc.toFixed(2)}%</div>
+          </div>
+          <div style="background:rgba(124,58,237,.2);color:var(--accent2);font-size:11px;padding:2px 7px;border-radius:10px;font-weight:700;">${s.score}分</div>
+        </div>`;
+      }).join('')}`;
+  } catch(e) {
+    resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;">❌ ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// 🎯 情境模擬
+// ============================================================
+async function runScenario() {
+  const sel = document.getElementById('scenarioSelect');
+  const scenario = sel?.value;
+  if (!scenario) { showToast('請選擇情境'); return; }
+
+  const resultEl = document.getElementById('scenarioResult');
+  resultEl.style.display = '';
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> 情境模擬中...</div>';
+
+  trackApiUsage('scenario', 800);
+  trackAiUsage('scenario');
+
+  const scenarioLabels = {
+    fed_cut: 'Fed降息1碼（聯邦基金利率下降0.25%）',
+    usd_drop: '美元走弱5%（DXY指數下跌5%）',
+    china_risk: '中國地緣風險升溫（台海緊張局勢）',
+    ai_boom: 'AI需求超預期爆發（大型AI採購需求激增）',
+    recession: '全球衰退疑慮升溫（PMI跌破50）',
+    tariff: '美國對台灣製品加徵關稅15%',
+  };
+
+  const holdings = state.portfolio || [];
+  if (!holdings.length) {
+    resultEl.innerHTML = '<div style="color:var(--text-dim);font-size:12px;">請先在持股管理頁新增持股</div>';
+    return;
+  }
+
+  const holdList = holdings.map(h => {
+    const s = state.stockCache[h.code] || {};
+    return `${h.code} ${s.name||h.code} | 現價:${s.price||h.cost} | 持股:${h.lots}股 | 類股:${s.sector||'--'}`;
+  }).join('\n');
+
+  const prompt = `情境：${scenarioLabels[scenario]}
+我的台股持股：
+${holdList}
+
+請逐支分析此情境對每支持股的影響（正面/中性/負面），並預估漲跌幅影響範圍（%），以及整體組合評估。
+回傳JSON：{"stocks":[{"code":"代號","impact":"positive/neutral/negative","change":"預估影響","reason":"原因20字"}],"overall":"整體組合影響，50字"}`;
+
+  try {
+    const raw = await callClaude([{ role:'user', content: prompt }], 800);
+    const json = raw.match(/\{[\s\S]*\}/)?.[0];
+    if (!json) throw new Error('格式異常');
+    const result = JSON.parse(json);
+
+    const impactColor = { positive:'var(--green)', neutral:'var(--text-dim)', negative:'var(--red)' };
+    const impactLabel = { positive:'✅ 正面', neutral:'⚪ 中性', negative:'❌ 負面' };
+
+    resultEl.innerHTML = `
+      <div style="background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;line-height:1.6;">
+        <strong>📊 整體組合：</strong>${result.overall}
+      </div>
+      ${(result.stocks||[]).map(s => `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px;background:var(--surface2);border-radius:8px;margin-bottom:5px;font-size:12px;">
+          <span style="font-family:'Space Mono',monospace;font-weight:700;min-width:44px;">${s.code}</span>
+          <span style="flex:1;color:var(--text-dim);">${s.reason}</span>
+          <span style="color:${impactColor[s.impact]||'var(--text-dim)'};font-weight:700;white-space:nowrap;">${impactLabel[s.impact]||s.impact} ${s.change}</span>
+        </div>`).join('')}`;
+  } catch(e) {
+    resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;">❌ ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// 🔗 AI 關聯股票分析
+// ============================================================
+async function runCorrelationAnalysis() {
+  const code = _currentTrendCode;
+  if (!code) { showToast('請先選擇要分析的股票'); return; }
+
+  const resultEl = document.getElementById('correlationResult');
+  if (!resultEl) return;
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> 分析關聯中...</div>';
+
+  trackApiUsage('correlation', 800);
+  trackAiUsage('correlation');
+
+  const s = state.stockCache[code] || {};
+  const prompt = `分析台股 ${s.name||code}(${code}) 在${s.sector||''}產業，用繁體中文回傳JSON：
+{"tw_stocks":[{"code":"代號","name":"名稱","relation":"關聯類型","reason":"原因15字"}],"us_stocks":[{"symbol":"代號","name":"名稱","relation":"關聯類型","reason":"原因15字"}],"summary":"總結30字"}
+tw_stocks 3支最相關台股，us_stocks 3支相關美股ETF或個股，relation 填「上游/下游/競爭/受益」其中一個。`;
+
+  try {
+    const raw = await callClaude([{ role:'user', content: prompt }], 800);
+    const json = raw.match(/\{[\s\S]*\}/)?.[0];
+    if (!json) throw new Error('格式異常');
+    const r = JSON.parse(json);
+
+    resultEl.innerHTML = `
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:8px;">${r.summary}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:5px;">🇹🇼 相關台股</div>
+      ${(r.tw_stocks||[]).map(s=>`
+        <div style="display:flex;align-items:center;gap:6px;padding:6px;background:var(--surface2);border-radius:6px;margin-bottom:4px;cursor:pointer;"
+             onclick="analyzeTrend('${s.code}')">
+          <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">${s.code}</span>
+          <span style="flex:1;font-size:11px;">${s.name}</span>
+          <span style="font-size:10px;background:rgba(0,212,255,.15);color:var(--accent);padding:1px 6px;border-radius:8px;">${s.relation}</span>
+        </div>`).join('')}
+      <div style="font-size:11px;font-weight:700;color:var(--gold);margin:8px 0 5px;">🇺🇸 相關美股/ETF</div>
+      ${(r.us_stocks||[]).map(s=>`
+        <div style="display:flex;align-items:center;gap:6px;padding:6px;background:var(--surface2);border-radius:6px;margin-bottom:4px;">
+          <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--gold);">${s.symbol}</span>
+          <span style="flex:1;font-size:11px;">${s.name}</span>
+          <span style="font-size:10px;background:rgba(245,158,11,.15);color:var(--gold);padding:1px 6px;border-radius:8px;">${s.relation}</span>
+        </div>`).join('')}`;
+  } catch(e) {
+    resultEl.innerHTML = `<div style="color:var(--red);font-size:12px;">❌ ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// 🌍 Global markets + fetchYahooData patch for vix/usdtwd fix
+// ============================================================
+// Patch fetchYahooData error handler to not reference sp500-*
+const _origFetchYahoo = fetchYahooData;
+async function fetchYahooData() {
+  try {
+    await _origFetchYahoo();
+  } catch(e) {
+    // silently handle
+    console.warn('Yahoo data error:', e.message);
+  }
+}
+
+
 // AI 使用量追蹤 & 費用警告
 // ============================================================
 const AI_COST = {
-  chat   : { tokens: 1200, costTWD: 1.2, label: 'AI 問答' },
-  trend  : { tokens: 1400, costTWD: 1.5, label: '趨勢分析' },
-  recs   : { tokens: 1500, costTWD: 1.6, label: 'AI 推薦' },
-  holding: { tokens:  800, costTWD: 0.8, label: '持股分析' },
-  potential:{tokens: 2000, costTWD: 2.1, label: '潛力股分析' },
+  chat      : { tokens: 1200, costTWD: 1.2, label: 'AI 問答' },
+  trend     : { tokens: 1400, costTWD: 1.5, label: '趨勢分析' },
+  recs      : { tokens: 1500, costTWD: 1.6, label: 'AI 推薦' },
+  holding   : { tokens:  800, costTWD: 0.8, label: '持股分析' },
+  potential : { tokens: 2000, costTWD: 2.1, label: '潛力股分析' },
+  global    : { tokens:  800, costTWD: 0.8, label: '國際市場分析' },
+  screener  : { tokens: 1000, costTWD: 1.0, label: 'AI選股' },
+  scenario  : { tokens:  800, costTWD: 0.8, label: '情境模擬' },
+  correlation:{ tokens:  800, costTWD: 0.8, label: '關聯分析' },
 };
 
 // 從 localStorage 恢復今日用量（每日自動重置）
