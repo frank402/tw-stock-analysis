@@ -5178,6 +5178,70 @@ function showAlertNotification(code, name, msg, dir, price) {
 // 資料來源：Worker?type=dividend (Yahoo Finance TW + TWSE)
 // ============================================================
 
+// ── 直接從 FinMind 公開 API 抓取台股股利（含現金+配股，不需 Worker）─
+async function fetchDividendDirect(code) {
+  // FinMind 免費公開 API，有 CORS header，不需要 proxy
+  // 資料欄位: CashEarningsDistribution(現金股利) / StockEarningsDistribution(股票股利)
+  //           date(除息日) / year(民國年)
+  const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${code}&start_date=2010-01-01`;
+  const r   = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new Error('FinMind HTTP ' + r.status);
+  const json = await r.json();
+  if (json.msg !== 'success' || !Array.isArray(json.data)) throw new Error('FinMind 回應異常');
+
+  // FinMind 欄位對應
+  // date: "2024-07-25", year: 113 (ROC), CashEarningsDistribution: 1.2,
+  // StockEarningsDistribution: 0.2, CashDividendPaymentDate: "2024-08-29"
+  const history = json.data.map(d => {
+    let year = parseInt(d.year) || 0;
+    if (year < 1000) year += 1911; // 民國→西元
+    const cash  = parseFloat(d.CashEarningsDistribution)  || 0;
+    const stock = parseFloat(d.StockEarningsDistribution) || 0;
+    return {
+      year, cashDiv: cash, stockDiv: stock,
+      total: +(cash + stock).toFixed(4),
+      exDivDate: d.date || '',
+    };
+  }).filter(h => h.cashDiv > 0 || h.stockDiv > 0)
+    .sort((a,b) => b.year - a.year);
+
+  return { history, src: 'finmind' };
+}
+
+// ── Yahoo Finance 估值資料（PE/PB/Yield/ROE等，不需 Worker）────────
+async function fetchQuoteDirect(code) {
+  const tw  = code + '.TW';
+  const fields = 'regularMarketPrice,trailingPE,priceToBook,trailingAnnualDividendRate,trailingAnnualDividendYield,marketCap,trailingEps,returnOnEquity,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,exDividendDate,shortName';
+  const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(tw)}&fields=${fields}&formatted=false&lang=en-US`;
+  // 先嘗試直接，失敗再嘗試 proxy
+  for (const endpoint of [url, `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`]) {
+    try {
+      const r = await fetch(endpoint, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) continue;
+      const outer = await r.json();
+      const raw   = outer.contents ? JSON.parse(outer.contents) : outer;
+      const q     = raw?.quoteResponse?.result?.[0];
+      if (!q) continue;
+      const yld = q.trailingAnnualDividendYield;
+      const pb  = q.priceToBook;
+      return {
+        name:      q.shortName || code,
+        pe:        (q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2)  : null,
+        pb_yahoo:  (pb > 0 && pb < 20)   ? +pb.toFixed(2)   : null,
+        yield_yahoo: yld != null          ? +(yld*100).toFixed(2) : null,
+        mktCap:    q.marketCap || null,
+        eps:       q.trailingEps || null,
+        roe:       q.returnOnEquity != null ? +(q.returnOnEquity*100).toFixed(1) : null,
+        beta:      q.beta || null,
+        high52w:   q.fiftyTwoWeekHigh || null,
+        low52w:    q.fiftyTwoWeekLow  || null,
+        nextExDiv: q.exDividendDate ? new Date(q.exDividendDate*1000).toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'}) : null,
+      };
+    } catch(_) {}
+  }
+  return {};
+}
+
 async function loadFundamentals(inputCode) {
   const code = (inputCode || document.getElementById('fundStockInput')?.value || '').trim().replace(/\D/g, '');
   if (!code) { showToast('請輸入股票代碼'); return; }
@@ -5191,29 +5255,74 @@ async function loadFundamentals(inputCode) {
   container.innerHTML = `<div class="loading"><div class="spinner"></div> 載入 ${code} 基本面資料...</div>`;
 
   try {
-    // 1. 即時快取資料
-    const cached = state.stockCache[code] || {};
-    const name   = cached.name || STOCK_NAMES[code] || code;
-    const price  = cached.price || 0;
+    const cached    = state.stockCache[code] || {};
+    const name      = cached.name || STOCK_NAMES[code] || code;
+    const price     = cached.price || 0;
     const changePct = cached.changePct || 0;
 
-    // 2. 呼叫 Worker dividend API
-    if (!WORKER_URL) throw new Error('請先設定 Cloudflare Worker 網址');
-    const res  = await fetch(`${WORKER_URL}?type=dividend&code=${code}`, {
-      signal: AbortSignal.timeout(15000),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    let data = null;
 
+    // ── 路徑 A：有 Worker → 走 Worker（最完整）─────────────────
+    if (WORKER_URL) {
+      try {
+        const res = await fetch(`${WORKER_URL}?type=dividend&code=${code}`, {
+          signal: AbortSignal.timeout(15000),
+        });
+        const d = await res.json();
+        if (!d.error) { data = d; console.log('[Fund] Worker data:', d); }
+      } catch(we) { console.warn('[Fund] Worker failed:', we.message); }
+    }
+
+    // ── 路徑 B：無 Worker 或 Worker 失敗 → 直接抓公開 API ──────
+    if (!data) {
+      console.log('[Fund] Using direct APIs (FinMind + Yahoo)...');
+      const [divResult, quoteResult] = await Promise.allSettled([
+        fetchDividendDirect(code),
+        fetchQuoteDirect(code),
+      ]);
+
+      const divData   = divResult.status === 'fulfilled' ? divResult.value : { history: [], src: 'failed' };
+      const quoteData = quoteResult.status === 'fulfilled' ? quoteResult.value : {};
+
+      console.log('[Fund] FinMind history:', divData.history?.length, 'records');
+      console.log('[Fund] Yahoo quote:', quoteData);
+
+      // 組合成與 Worker 相同格式
+      data = {
+        quote: {
+          name:       quoteData.name || name,
+          pe:         quoteData.pe   || null,
+          pb_yahoo:   quoteData.pb_yahoo || null,
+          yield_yahoo:quoteData.yield_yahoo || null,
+          mktCap:     quoteData.mktCap || null,
+          eps:        quoteData.eps  || null,
+          roe:        quoteData.roe  || null,
+          beta:       quoteData.beta || null,
+          high52w:    quoteData.high52w || null,
+          low52w:     quoteData.low52w  || null,
+          nextExDiv:  quoteData.nextExDiv || null,
+          src:        'yahoo-direct',
+        },
+        history: divData.history,
+        bwibbu:  {},
+        code,
+        src:     divData.src,
+      };
+    }
+
+    if (!data) throw new Error('所有資料來源均失敗');
     renderFundamentals(code, name, price, changePct, data);
+
   } catch(e) {
-    const container = document.getElementById('fundResult');
-    if (container) container.innerHTML = `
+    console.error('[Fund] Fatal error:', e);
+    const c2 = document.getElementById('fundResult');
+    if (c2) c2.innerHTML = `
       <div class="card" style="text-align:center;padding:40px;color:var(--gold);">
         <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
         <div style="font-size:14px;font-weight:600;">載入失敗</div>
         <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">${e.message}</div>
-        <button class="btn-outline" style="margin-top:16px;" onclick="loadFundamentals('${document.getElementById('fundStockInput')?.value}')">重試</button>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">請開啟瀏覽器 Console 查看詳細錯誤</div>
+        <button class="btn-outline" style="margin-top:16px;" onclick="loadFundamentals('${code}')">重試</button>
       </div>`;
   }
 }
@@ -5266,15 +5375,29 @@ function renderFundamentals(code, name, price, changePct, data) {
   // 標準化配息歷史：worker v8 返回 TWSE 格式 {year, cashDiv, stockDiv, total, exDivDate}
   // 或 Yahoo 格式 {year, cashDiv, total, exDivDate}；統一為前端格式
   const rawHy = data.history || [];
-  const hy = rawHy.map(h => ({
-    year:   h.year,
-    amount: h.cashDiv || h.amount || 0,   // 現金股利
-    stock:  h.stockDiv || 0,              // 股票股利
-    total:  h.total || h.cashDiv || h.amount || 0,
-    date:   h.exDivDate || h.date || '--',
-    type:   (h.stockDiv > 0 && (h.cashDiv || 0) === 0) ? 'stock' : 'cash',
-    src:    h.src || 'twse',
-  })).sort((a, b) => b.year - a.year);
+  // Debug: log raw data to console
+  if (rawHy.length > 0) {
+    console.log('[Fund] Raw history sample:', rawHy[0]);
+    const hasStock = rawHy.some(h => (h.stockDiv || h.StockEarningsDistribution || 0) > 0);
+    console.log('[Fund] Has stock dividends:', hasStock, '| Total records:', rawHy.length);
+  }
+  const hy = rawHy.map(h => {
+    // 支援 FinMind 欄位名 (CashEarningsDistribution / StockEarningsDistribution)
+    // 以及 Worker 欄位名 (cashDiv / stockDiv) 和舊格式 (amount / stock)
+    const cash  = parseFloat(h.cashDiv  || h.CashEarningsDistribution  || h.amount || 0) || 0;
+    const stock = parseFloat(h.stockDiv || h.StockEarningsDistribution || h.stock  || 0) || 0;
+    return {
+      year:   parseInt(h.year) || 0,
+      amount: +cash.toFixed(4),
+      stock:  +stock.toFixed(4),
+      total:  +(cash + stock).toFixed(4),
+      date:   h.exDivDate || h.date || '--',
+      type:   (stock > 0 && cash === 0) ? 'stock' : 'cash',
+      src:    h.src || data.src || 'api',
+    };
+  }).filter(h => h.year > 2000 && (h.amount > 0 || h.stock > 0))
+    .sort((a, b) => b.year - a.year);
+  console.log('[Fund] Normalized hy:', hy.slice(0,3));
 
   // ── 估值數據取值邏輯 ──────────────────────────────────────
   // PE: Yahoo 通常正確；TWSE 備援
