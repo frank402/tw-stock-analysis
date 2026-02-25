@@ -4,6 +4,10 @@
   台股智析 Taiwan Stock Dashboard
   版本紀錄 (Changelog)
 ==============================================================
+  v11.0 2026-02-25  配息資料改用 TWSE OpenAPI t187ap45_L（最新年）
+                    FinMind 除息年修正（用 date 欄位年份取代 year 欄位）
+                    Worker 新增 t187ap45_L 最新年 + FinMind 歷史合併邏輯
+                    配息表新增「來源」欄，顯示 TWSE★/FinMind
   v10.0 2026-02-25  配息圖WantGoo並排雙色柱+橫式年份/配股欄修正
                     國際股市 HTML ID 修正 + 三層代理備援
   v9.0  2026-02-24  修復所有點擊失效（switchTab 函式遺失）
@@ -5178,69 +5182,156 @@ function showAlertNotification(code, name, msg, dir, price) {
 // 資料來源：Worker?type=dividend (Yahoo Finance TW + TWSE)
 // ============================================================
 
-// ── 直接從 FinMind 公開 API 抓取台股股利（含現金+配股，不需 Worker）─
-async function fetchDividendDirect(code) {
-  // FinMind 免費公開 API，有 CORS header，不需要 proxy
-  // 資料欄位: CashEarningsDistribution(現金股利) / StockEarningsDistribution(股票股利)
-  //           date(除息日) / year(民國年)
-  const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${code}&start_date=2010-01-01`;
-  const r   = await fetch(url, { signal: AbortSignal.timeout(12000) });
+// ════════════════════════════════════════════════════════════════
+// 無 Worker 直接抓公開 API（前端備援）
+// 資料來源優先順序：
+//   配息 ① TWSE OpenAPI t187ap45_L（最新年，有CORS）
+//        ② FinMind TaiwanStockDividend（歷年，含配股，有CORS）
+//   估值    Yahoo Finance v8（有CORS但不穩定，用proxy備援）
+// ════════════════════════════════════════════════════════════════
+
+// ── TWSE OpenAPI t187ap45_L：最新年度股利（全市場，前端過濾）────
+// 快取整張表避免重複抓取
+let _twseOpenApiCache = null;
+let _twseOpenApiExpiry = 0;
+
+async function fetchTWSEOpenApi() {
+  if (_twseOpenApiCache && Date.now() < _twseOpenApiExpiry) return _twseOpenApiCache;
+  const r = await fetch('https://openapi.twse.com.tw/v1/opendata/t187ap45_L', {
+    signal: AbortSignal.timeout(15000),
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!r.ok) throw new Error('TWSE OpenAPI HTTP ' + r.status);
+  _twseOpenApiCache  = await r.json();
+  _twseOpenApiExpiry = Date.now() + 12 * 3600 * 1000; // 12小時
+  return _twseOpenApiCache;
+}
+
+function parseTWSEOpenApiForCode(allRows, code) {
+  const rows = allRows.filter(row => row['公司代號'] === code);
+  return rows.map(row => {
+    // 股利年度是 ROC 年（如 "113"）→ 西元除息年 = ROC+1911+1
+    let rocYear = parseInt(row['股利年度'] || '0');
+    const adYear  = rocYear < 1000 ? rocYear + 1911 : rocYear;
+    const exYear  = adYear + 1; // 台股通常次年 7-8 月除息
+
+    const cashEarnings = parseFloat(row['股東配發-盈餘分配之現金股利(元/股)']     || '0') || 0;
+    const cashLegal    = parseFloat(row['股東配發-法定盈餘公積發放之現金(元/股)'] || '0') || 0;
+    const cashCapital  = parseFloat(row['股東配發-資本公積發放之現金(元/股)']     || '0') || 0;
+    const cashDiv      = +(cashEarnings + cashLegal + cashCapital).toFixed(4);
+
+    const stockEarnings = parseFloat(row['股東配發-盈餘轉增資配股(元/股)']         || '0') || 0;
+    const stockLegal    = parseFloat(row['股東配發-法定盈餘公積轉增資配股(元/股)'] || '0') || 0;
+    const stockCapital  = parseFloat(row['股東配發-資本公積轉增資配股(元/股)']     || '0') || 0;
+    const stockDiv      = +(stockEarnings + stockLegal + stockCapital).toFixed(4);
+
+    return {
+      year:       exYear,
+      fiscalYear: adYear,
+      cashDiv, stockDiv,
+      total:      +(cashDiv + stockDiv).toFixed(4),
+      exDivDate:  '',
+      status:     row['決議（擬議）進度'] || '',
+      src:        'twse-openapi',
+    };
+  }).filter(h => h.cashDiv > 0 || h.stockDiv > 0);
+}
+
+// ── FinMind TaiwanStockDividend：歷年含配股（★ 除息日年份修正）──
+async function fetchFinMindHistory(code) {
+  const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${code}&start_date=2009-01-01`;
+  const r   = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('FinMind HTTP ' + r.status);
   const json = await r.json();
   if (json.msg !== 'success' || !Array.isArray(json.data)) throw new Error('FinMind 回應異常');
 
-  // FinMind 欄位對應
-  // date: "2024-07-25", year: 113 (ROC), CashEarningsDistribution: 1.2,
-  // StockEarningsDistribution: 0.2, CashDividendPaymentDate: "2024-08-29"
-  const history = json.data.map(d => {
-    let year = parseInt(d.year) || 0;
-    if (year < 1000) year += 1911; // 民國→西元
-    const cash  = parseFloat(d.CashEarningsDistribution)  || 0;
-    const stock = parseFloat(d.StockEarningsDistribution) || 0;
+  return json.data.map(d => {
+    // ★ 關鍵修正：用 date（除息日）的年份，不用 year（會計年）
+    // date = "2025-07-25" → exYear = 2025（正確顯示除息年度）
+    // year = "113" → 2024（會計年，台灣標準，但用在除息年度欄位會少一年）
+    const exDateStr = d.date || '';
+    const exYear    = exDateStr.length >= 4 ? parseInt(exDateStr.substring(0, 4)) : 0;
+    const cashDiv   = parseFloat(d.CashEarningsDistribution)  || 0;
+    const stockDiv  = parseFloat(d.StockEarningsDistribution) || 0;
     return {
-      year, cashDiv: cash, stockDiv: stock,
-      total: +(cash + stock).toFixed(4),
-      exDivDate: d.date || '',
+      year:      exYear > 2009 ? exYear : 0,
+      cashDiv:   +cashDiv.toFixed(4),
+      stockDiv:  +stockDiv.toFixed(4),
+      total:     +(cashDiv + stockDiv).toFixed(4),
+      exDivDate: exDateStr,
+      src:       'finmind',
     };
-  }).filter(h => h.cashDiv > 0 || h.stockDiv > 0)
-    .sort((a,b) => b.year - a.year);
-
-  return { history, src: 'finmind' };
+  }).filter(h => h.year > 2009 && (h.cashDiv > 0 || h.stockDiv > 0))
+    .sort((a, b) => b.year - a.year);
 }
 
-// ── Yahoo Finance 估值資料（PE/PB/Yield/ROE等，不需 Worker）────────
+// ── 合併：TWSE OpenAPI 最新年 + FinMind 歷年 ─────────────────────
+async function fetchDividendDirect(code) {
+  const [openApiResult, finmindResult] = await Promise.allSettled([
+    fetchTWSEOpenApi().then(all => parseTWSEOpenApiForCode(all, code)),
+    fetchFinMindHistory(code),
+  ]);
+
+  const openApiRows  = openApiResult.status  === 'fulfilled' ? openApiResult.value  : [];
+  const finmindRows  = finmindResult.status  === 'fulfilled' ? finmindResult.value  : [];
+
+  console.log('[Div] TWSE OpenAPI rows:', openApiRows.length, openApiRows[0]);
+  console.log('[Div] FinMind rows:', finmindRows.length, finmindRows[0]);
+
+  // 合併：OpenAPI 為最新年，FinMind 為歷史
+  const openApiYears = new Set(openApiRows.map(h => h.year));
+  const history = [
+    ...openApiRows,
+    ...finmindRows.filter(h => !openApiYears.has(h.year)),
+  ].sort((a, b) => b.year - a.year);
+
+  if (history.length === 0) throw new Error('找不到配息資料（TWSE OpenAPI + FinMind 均無資料）');
+
+  const hasStockDiv = history.some(h => h.stockDiv > 0);
+  console.log('[Div] Total records:', history.length, '| hasStockDiv:', hasStockDiv);
+  return { history, src: 'twse-openapi+finmind' };
+}
+
+// ── Yahoo Finance 估值（PE/PB/殖利率等）─────────────────────────
 async function fetchQuoteDirect(code) {
-  const tw  = code + '.TW';
+  const tw     = code + '.TW';
   const fields = 'regularMarketPrice,trailingPE,priceToBook,trailingAnnualDividendRate,trailingAnnualDividendYield,marketCap,trailingEps,returnOnEquity,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,exDividendDate,shortName';
-  const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(tw)}&fields=${fields}&formatted=false&lang=en-US`;
-  // 先嘗試直接，失敗再嘗試 proxy
-  for (const endpoint of [url, `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`]) {
+  const url    = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(tw)}&fields=${fields}&formatted=false&lang=en-US`;
+
+  for (const endpoint of [
+    url,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  ]) {
     try {
       const r = await fetch(endpoint, { signal: AbortSignal.timeout(10000) });
       if (!r.ok) continue;
       const outer = await r.json();
       const raw   = outer.contents ? JSON.parse(outer.contents) : outer;
       const q     = raw?.quoteResponse?.result?.[0];
-      if (!q) continue;
+      if (!q?.regularMarketPrice) continue;
       const yld = q.trailingAnnualDividendYield;
       const pb  = q.priceToBook;
       return {
-        name:      q.shortName || code,
-        pe:        (q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2)  : null,
-        pb_yahoo:  (pb > 0 && pb < 20)   ? +pb.toFixed(2)   : null,
-        yield_yahoo: yld != null          ? +(yld*100).toFixed(2) : null,
-        mktCap:    q.marketCap || null,
-        eps:       q.trailingEps || null,
-        roe:       q.returnOnEquity != null ? +(q.returnOnEquity*100).toFixed(1) : null,
-        beta:      q.beta || null,
-        high52w:   q.fiftyTwoWeekHigh || null,
-        low52w:    q.fiftyTwoWeekLow  || null,
-        nextExDiv: q.exDividendDate ? new Date(q.exDividendDate*1000).toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'}) : null,
+        name:        q.shortName || code,
+        pe:          (q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2) : null,
+        pb_yahoo:    (pb > 0 && pb < 20)   ? +pb.toFixed(2)          : null,
+        yield_yahoo: yld != null            ? +(yld * 100).toFixed(2) : null,
+        mktCap:      q.marketCap   || null,
+        eps:         q.trailingEps || null,
+        roe:         q.returnOnEquity != null ? +(q.returnOnEquity * 100).toFixed(1) : null,
+        beta:        q.beta || null,
+        high52w:     q.fiftyTwoWeekHigh || null,
+        low52w:      q.fiftyTwoWeekLow  || null,
+        nextExDiv:   q.exDividendDate
+          ? new Date(q.exDividendDate * 1000).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
+          : null,
       };
     } catch(_) {}
   }
   return {};
 }
+
 
 async function loadFundamentals(inputCode) {
   const code = (inputCode || document.getElementById('fundStockInput')?.value || '').trim().replace(/\D/g, '');
@@ -5275,10 +5366,10 @@ async function loadFundamentals(inputCode) {
 
     // ── 路徑 B：無 Worker 或 Worker 失敗 → 直接抓公開 API ──────
     if (!data) {
-      console.log('[Fund] Using direct APIs (FinMind + Yahoo)...');
+      console.log('[Fund] Using direct APIs (TWSE OpenAPI t187ap45_L + FinMind + Yahoo)...');
       const [divResult, quoteResult] = await Promise.allSettled([
-        fetchDividendDirect(code),
-        fetchQuoteDirect(code),
+        fetchDividendDirect(code),  // TWSE OpenAPI + FinMind
+        fetchQuoteDirect(code),     // Yahoo Finance
       ]);
 
       const divData   = divResult.status === 'fulfilled' ? divResult.value : { history: [], src: 'failed' };
@@ -5375,29 +5466,34 @@ function renderFundamentals(code, name, price, changePct, data) {
   // 標準化配息歷史：worker v8 返回 TWSE 格式 {year, cashDiv, stockDiv, total, exDivDate}
   // 或 Yahoo 格式 {year, cashDiv, total, exDivDate}；統一為前端格式
   const rawHy = data.history || [];
-  // Debug: log raw data to console
+  // Log to console for debugging
   if (rawHy.length > 0) {
-    console.log('[Fund] Raw history sample:', rawHy[0]);
-    const hasStock = rawHy.some(h => (h.stockDiv || h.StockEarningsDistribution || 0) > 0);
-    console.log('[Fund] Has stock dividends:', hasStock, '| Total records:', rawHy.length);
+    console.log('[Fund] Raw history records:', rawHy.length);
+    console.log('[Fund] Sample[0]:', JSON.stringify(rawHy[0]));
+    console.log('[Fund] Has stock div:', rawHy.some(h => (parseFloat(h.stockDiv||h.StockEarningsDistribution||h.stock||0))>0));
+  } else {
+    console.warn('[Fund] No history data!', data);
   }
+
   const hy = rawHy.map(h => {
-    // 支援 FinMind 欄位名 (CashEarningsDistribution / StockEarningsDistribution)
-    // 以及 Worker 欄位名 (cashDiv / stockDiv) 和舊格式 (amount / stock)
+    // 支援所有來源欄位格式
     const cash  = parseFloat(h.cashDiv  || h.CashEarningsDistribution  || h.amount || 0) || 0;
     const stock = parseFloat(h.stockDiv || h.StockEarningsDistribution || h.stock  || 0) || 0;
+    // year 已經是除息年（Worker / 直接抓均確保是除息日年份）
+    const yr = parseInt(h.year) || 0;
     return {
-      year:   parseInt(h.year) || 0,
-      amount: +cash.toFixed(4),
-      stock:  +stock.toFixed(4),
-      total:  +(cash + stock).toFixed(4),
-      date:   h.exDivDate || h.date || '--',
-      type:   (stock > 0 && cash === 0) ? 'stock' : 'cash',
-      src:    h.src || data.src || 'api',
+      year:    yr,
+      amount:  +cash.toFixed(4),
+      stock:   +stock.toFixed(4),
+      total:   +(cash + stock).toFixed(4),
+      date:    h.exDivDate || h.date || '--',
+      status:  h.status || '',           // TWSE OpenAPI 決議進度
+      src:     h.src || data.src || 'api',
     };
-  }).filter(h => h.year > 2000 && (h.amount > 0 || h.stock > 0))
+  }).filter(h => h.year > 2005 && (h.amount > 0 || h.stock > 0))
     .sort((a, b) => b.year - a.year);
-  console.log('[Fund] Normalized hy:', hy.slice(0,3));
+
+  console.log('[Fund] Normalized records:', hy.length, '| with stock div:', hy.filter(h=>h.stock>0).length);
 
   // ── 估值數據取值邏輯 ──────────────────────────────────────
   // PE: Yahoo 通常正確；TWSE 備援
@@ -5540,10 +5636,11 @@ function renderFundamentals(code, name, price, changePct, data) {
           <thead>
             <tr style="background:var(--surface2);">
               <th style="text-align:left;padding:8px;">除息年度</th>
-              <th style="text-align:right;color:#4dd0e1;">現金股利(元)</th>
-              <th style="text-align:right;color:#f9a825;">股票股利(股)</th>
+              <th style="text-align:right;color:#4dd0e1;">現金(元/股)</th>
+              <th style="text-align:right;color:#f9a825;">配股(元/股)</th>
               <th style="text-align:right;">合計</th>
               <th>除息日</th>
+              <th style="font-size:10px;color:var(--text-dim);">來源</th>
             </tr>
           </thead>
           <tbody>
@@ -5556,7 +5653,14 @@ function renderFundamentals(code, name, price, changePct, data) {
                 + '<td style="text-align:right;font-family:Space Mono,monospace;font-weight:700;color:' + (cash>0?'#4dd0e1':'var(--text-dim)') + ';">' + (cash>0?cash.toFixed(4):'--') + '</td>'
                 + '<td style="text-align:right;font-family:Space Mono,monospace;font-weight:700;color:' + (stock>0?'#f9a825':'var(--text-dim)') + ';">' + (stock>0?stock.toFixed(4):'--') + '</td>'
                 + '<td style="text-align:right;font-family:Space Mono,monospace;">' + (total>0?total.toFixed(4):'--') + '</td>'
-                + '<td style="font-size:11px;color:var(--text-dim);">' + (h.date||'--') + '</td>'
+                + '<td style="font-size:11px;color:var(--text-dim);">' + (h.date&&h.date!='--' ? h.date.substring(0,10) : '--') + '</td>'
+                + '<td style="font-size:9px;color:var(--text-dim);text-align:center;">'
+                + (h.src==='twse-openapi'?'<span style="color:var(--gold)">TWSE★</span>'
+                  :h.src==='finmind'?'FinMind'
+                  :h.src==='twse-openapi+finmind'?'TWSE+FM'
+                  :h.src||'')
+                + (h.status?'<br><span style="font-size:8px;opacity:.7;">'+h.status+'</span>':'')
+                + '</td>'
                 + '</tr>';
             }).join('')}
           </tbody>
@@ -5564,7 +5668,7 @@ function renderFundamentals(code, name, price, changePct, data) {
       </div>` : ''}
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">
-        <div style="font-size:10px;color:var(--text-muted);">資料來源：Yahoo Finance (${code}.TW) ｜ 台灣證交所 ｜ ${new Date().toLocaleDateString('zh-TW')}</div>
+        <div style="font-size:10px;color:var(--text-muted);">資料來源：TWSE OpenAPI t187ap45_L（最新年）｜ FinMind（歷年配息）｜ Yahoo Finance（估值）｜ TWSE BWIBBU_d（PE/PB）｜ ${new Date().toLocaleDateString('zh-TW')}</div>
         <button class="btn-outline" style="font-size:11px;padding:3px 10px;"
           onclick="quickChat('分析${name}(${code})的配息政策，近年殖利率${yld||'--'}%，歷年配息趨勢如何？值得長期持有嗎？')">
           🤖 AI 配息分析
