@@ -4,6 +4,8 @@
   台股智析 Taiwan Stock Dashboard
   版本紀錄 (Changelog)
 ==============================================================
+  v12.0 2026-02-26  六大修復：VIX Stooq備援/動態情緒指數/90s盤中刷新
+                    基本面PB+Yield+EPS+ROE欄位修正/效能優化/新聞RSS2json直接抓
   v11.0 2026-02-25  配息資料改用 TWSE OpenAPI t187ap45_L（最新年）
                     FinMind 除息年修正（用 date 欄位年份取代 year 欄位）
                     Worker 新增 t187ap45_L 最新年 + FinMind 歷史合併邏輯
@@ -2416,6 +2418,12 @@
 // ============================================================
 // STATE
 // ============================================================
+// DOM 元素快取（避免重複 getElementById）
+const DOM = {
+  _c: {},
+  get(id) { return this._c[id] || (this._c[id] = document.getElementById(id)); }
+};
+
 const state = {
   // apiKey 已移至 Worker Secret，不再存於瀏覽器
   watchlist: JSON.parse(localStorage.getItem('watchlist') || '["2330","2317","2454","2382","2412"]'),
@@ -2557,6 +2565,21 @@ const WORKER_URL = localStorage.getItem('workerUrl') || '';
 const FALLBACK   = 'https://api.allorigins.win/get?url=';
 
 // ── 底層 fetch 工具：優先走 Worker，否則走 allorigins ─────────
+// 短暫請求快取（30s TTL）
+const _proxyCache = new Map();
+async function cachedFetch(url, ttl = 30000) {
+  const now = Date.now();
+  const hit = _proxyCache.get(url);
+  if (hit && now - hit.ts < ttl) return hit.data;
+  const r   = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  _proxyCache.set(url, { data, ts: now });
+  if (_proxyCache.size > 50)
+    for (const [k,v] of _proxyCache) if (now - v.ts > 120000) _proxyCache.delete(k);
+  return data;
+}
+
 async function proxyFetch(workerPath, fallbackUrl) {
   // 先試 Worker（若已設定）
   if (WORKER_URL) {
@@ -2592,14 +2615,18 @@ async function fetchStockPrices(codes) {
       rawStocks = {};
       (data.msgArray || []).forEach(item => {
         const code     = item.c;
-        const price    = parseFloat(item.z) || parseFloat(item.y) || 0;
+        // item.z = 當前成交價（'-' 或 '' = 尚無成交，用昨收）
+        const zVal     = item.z && item.z !== '-' ? item.z : null;
         const prev     = parseFloat(item.y) || 0;
+        const price    = zVal ? parseFloat(zVal) : prev;
         const change   = +(price - prev).toFixed(2);
         const changePct= prev > 0 ? +((change / prev) * 100).toFixed(2) : 0;
+        // isLive: 盤中且有成交價
+        const isLive   = !!zVal;
         rawStocks[code] = {
-          name: item.n || code, price, change, changePct,
+          name: item.n || code, price, change, changePct, isLive,
           open: parseFloat(item.o)||0, high: parseFloat(item.h)||0,
-          low: parseFloat(item.l)||0, prev, volume: parseInt(item.v)||0, time: item.t||''
+          low:  parseFloat(item.l)||0, prev, volume: parseInt(item.v)||0, time: item.t||''
         };
       });
     }
@@ -2698,6 +2725,10 @@ async function fetchYahooData() {
     state.yahooData = result;
     updateMacroCards();
     updateOverviewCards();
+    // 若 VIX 仍缺失，從 Stooq 補抓
+    if (!state.yahooData['^VIX']?.price) {
+      fetchVixFallback();
+    }
   } catch(e) {
     console.warn('All Yahoo sources failed:', e.message);
     const uEl = document.getElementById('usdtwd-price');
@@ -2709,20 +2740,117 @@ async function fetchYahooData() {
 }
 
 // ── RSS 新聞 ─────────────────────────────────────────────────
-async function fetchRSSNews() {
-  if (!WORKER_URL) return; // 需要 Worker 才能抓 RSS
+// VIX Stooq 備援（Yahoo proxy 不穩定時使用）
+async function fetchVixFallback() {
   try {
-    // 同時抓多個來源
-    const [cnyes, udn] = await Promise.allSettled([
-      fetch(`${WORKER_URL}?type=rss&feed=cnyes`).then(r=>r.json()),
-      fetch(`${WORKER_URL}?type=rss&feed=udn`).then(r=>r.json()),
-    ]);
-    const items = [
-      ...(cnyes.value?.items || []),
-      ...(udn.value?.items   || []),
-    ].slice(0, 12);
-    if (items.length) renderRealNews(items);
-  } catch(e) { console.warn('RSS fetch failed:', e.message); }
+    const url = 'https://stooq.com/q/d/l/?s=vix&i=d&l=3';
+    const r   = await fetch(
+      'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return;
+    const j     = await r.json();
+    const lines = (j.contents||'').trim().split('\n')
+      .filter(l => l && !l.startsWith('Date'));
+    if (lines.length < 2) return;
+    const last   = lines[lines.length-1].split(',');
+    const prev   = lines[lines.length-2].split(',');
+    const close  = parseFloat(last[4])  || 0;
+    const prevC  = parseFloat(prev[4]) || close;
+    if (close > 0) {
+      const ch = +(close - prevC).toFixed(2);
+      state.yahooData['^VIX'] = {
+        name:'VIX', price: close,
+        change: ch,
+        changePct: prevC > 0 ? +((ch/prevC)*100).toFixed(2) : 0,
+        prev: prevC, src:'stooq'
+      };
+      updateOverviewCards();
+      updateMacroCards();
+      console.log('[VIX] Stooq fallback:', close);
+    }
+  } catch(e) { console.warn('[VIX] Stooq fallback failed:', e.message); }
+}
+
+// RSS 來源設定
+const RSS_SOURCES = [
+  { name: 'cnyes', label: '鉅亨網',
+    url: 'https://feeds.feedburner.com/cnyes/tw-rss' },
+  { name: 'moneydj', label: 'MoneyDJ',
+    url: 'https://www.moneydj.com/KMDJ/RssCenter/RssData.aspx?sid=DJNEWS' },
+];
+
+async function fetchRSSNews() {
+  let items = [];
+
+  // ── 路徑 A：Worker RSS（最穩定）──────────────────────────
+  if (WORKER_URL) {
+    try {
+      const [cnyes, udn] = await Promise.allSettled([
+        fetch(`${WORKER_URL}?type=rss&feed=cnyes`).then(r=>r.json()),
+        fetch(`${WORKER_URL}?type=rss&feed=udn`).then(r=>r.json()),
+      ]);
+      items = [
+        ...(cnyes.value?.items || []),
+        ...(udn.value?.items   || []),
+      ];
+    } catch(e) { console.warn('[RSS] Worker failed:', e.message); }
+  }
+
+  // ── 路徑 B：直接 allorigins RSS（無 Worker 時）─────────
+  if (items.length === 0) {
+    const rssJob = async (src) => {
+      try {
+        // rss2json 免費 API - XML→JSON
+        const encoded = encodeURIComponent(src.url);
+        const apiUrl  = `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&api_key=&count=8`;
+        const r = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) throw new Error('rss2json HTTP ' + r.status);
+        const j = await r.json();
+        if (j.status !== 'ok') throw new Error('rss2json error: ' + j.message);
+        return (j.items || []).map(i => ({
+          title:   i.title || '',
+          desc:    i.description?.replace(/<[^>]+>/g,'').slice(0,120) || '',
+          link:    i.link  || '',
+          pubDate: i.pubDate || '',
+          source:  src.name,
+        }));
+      } catch(e) {
+        // rss2json 失敗 → 試 allorigins raw RSS
+        try {
+          const r2 = await fetch(
+            'https://api.allorigins.win/get?url=' + encodeURIComponent(src.url),
+            { signal: AbortSignal.timeout(8000) }
+          );
+          if (!r2.ok) return [];
+          const j2   = await r2.json();
+          const xml  = j2.contents || '';
+          // Simple XML parsing for <item>
+          const titles = [...xml.matchAll(/<title><!\[CDATA\[(.+?)\]\]><\/title>/g)].slice(1,9);
+          const links  = [...xml.matchAll(/<link>(?!.*rss)(https?[^<]+)<\/link>/g)].slice(0,8);
+          const dates  = [...xml.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)].slice(0,8);
+          return titles.map((t,i) => ({
+            title:   t[1] || '',
+            desc:    '',
+            link:    links[i]?.[1] || '',
+            pubDate: dates[i]?.[1] || '',
+            source:  src.name,
+          })).filter(n => n.title);
+        } catch(_) { return []; }
+      }
+    };
+
+    const results = await Promise.allSettled(RSS_SOURCES.map(rssJob));
+    items = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+  }
+
+  const finalItems = items.slice(0, 15);
+  if (finalItems.length > 0) {
+    renderRealNews(finalItems);
+    console.log('[RSS] Fetched', finalItems.length, 'items');
+  } else {
+    console.warn('[RSS] No items from any source');
+  }
 }
 
 // ── TWSE 盤後漲跌幅排行（補充用）────────────────────────────
@@ -2796,6 +2924,8 @@ async function loadAllData() {
 
   // RSS 新聞（非阻塞）
   fetchRSSNews();
+  // 每15分鐘自動刷新新聞
+  setInterval(fetchRSSNews, 15 * 60 * 1000);
   // 趨勢分析頁初始化
   setTimeout(initTrendPage, 500);
 }
@@ -2814,7 +2944,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAiRecs();
   renderMacro();
   renderCalendar();
-  animateSentiment(62);
+  animateSentiment(50); // 初始佔位
 
   // 抓 TWSE 真實資料
   await loadAllData();
@@ -2836,17 +2966,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderOverview();
   renderWatchlist();
   renderPortfolio();
+  calcAndUpdateSentiment(); // 用真實資料計算市場情緒
 
-  // 盤中每60秒自動更新
+  // 盤中自動更新
   if (state.isMarketOpen) {
-    setInterval(async () => {
+    // 股價 + 大盤：每90秒（TWSE MIS 友善頻率）
+    const _refreshPrices = async () => {
+      if (!state.isMarketOpen) return; // 若已收盤停止
       const allCodes = [...new Set([...state.watchlist,'2330','2317','2454','2382','2412'])];
-      await Promise.all([fetchStockPrices(allCodes), fetchTWSEIndex()]);
-      renderTicker();
-      renderWatchlist();
-      updateIndexCard();
-      renderMovers(moverFilter);
-    }, 60000);
+      try {
+        await Promise.all([fetchStockPrices(allCodes), fetchTWSEIndex()]);
+        renderTicker();
+        renderWatchlist();
+        updateIndexCard();
+        renderMovers(moverFilter);
+        calcAndUpdateSentiment(); // 情緒隨資料更新
+      } catch(_) {}
+    };
+    setInterval(_refreshPrices, 90000); // 90秒
+
+    // Yahoo（VIX/USD/指數）：每3分鐘
+    setInterval(async () => {
+      if (!state.isMarketOpen) return;
+      try {
+        await fetchYahooData();
+        calcAndUpdateSentiment();
+        if (!state.yahooData['^VIX']?.price) fetchVixFallback();
+      } catch(_) {}
+    }, 180000); // 3分鐘
   }
 });
 
@@ -2855,7 +3002,7 @@ function updateClock() {
   const tw = new Intl.DateTimeFormat('zh-TW', {
     timeZone:'Asia/Taipei', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
   }).format(now);
-  document.getElementById('currentTime').textContent = tw + ' (台北)';
+  const clkEl = DOM.get('currentTime'); if(clkEl) clkEl.textContent = tw + ' (台北)';
 }
 
 function checkMarketStatus() {
@@ -3227,7 +3374,7 @@ function renderOverview() {
     renderSparkline('usdtwd-spark', randomWalkData(20, 31.8, 32.4), false);
   }
   renderHeatmap();
-  animateSentiment(62);
+  calcAndUpdateSentiment();
   renderMovers('gain');
   renderSectors();
   renderQuickAlerts();
@@ -3257,6 +3404,69 @@ function renderSparkline(id, data, up) {
   });
   const color = up ? 'var(--green)' : 'var(--red)';
   svg.innerHTML = `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+}
+
+// 動態計算市場情緒（TWSE + VIX + USD/TWD + 廣度）
+function calcAndUpdateSentiment() {
+  const idx  = state.twseIndex || {};
+  const vix  = state.yahooData['^VIX']     || {};
+  const twd  = state.yahooData['USDTWD=X'] || {};
+  const stocks = Object.values(state.stockCache);
+
+  // 各因子 0-100 分
+  let score = 50; // 基準
+  let factors = 0;
+
+  // 1. 台股大盤漲跌（40%）
+  if (idx.changePct !== undefined) {
+    const twseScore = 50 + Math.min(Math.max(idx.changePct * 8, -40), 40);
+    score = score * 0.6 + twseScore * 0.4;
+    factors++;
+  }
+
+  // 2. VIX 恐慌（30%，反向：VIX 低=情緒好）
+  if (vix.price > 0) {
+    // VIX 10=貪婪100, VIX 20=中性50, VIX 40=恐慌0
+    const vixScore = Math.max(0, Math.min(100, 100 - (vix.price - 10) * 3.3));
+    score = score * 0.7 + vixScore * 0.3;
+    factors++;
+  }
+
+  // 3. USD/TWD（15%，台幣升值=樂觀）
+  if (twd.changePct !== undefined) {
+    const fxScore = 50 - Math.min(Math.max(twd.changePct * 10, -25), 25);
+    score = score * 0.85 + fxScore * 0.15;
+    factors++;
+  }
+
+  // 4. 市場廣度（15%，上漲家數比例）
+  if (stocks.length >= 5) {
+    const gainers = stocks.filter(s => s.changePct > 0).length;
+    const breadth = (gainers / stocks.length) * 100;
+    score = score * 0.85 + breadth * 0.15;
+    factors++;
+  }
+
+  // 若沒有任何資料，保持中性50
+  const finalScore = factors > 0 ? Math.round(Math.max(5, Math.min(95, score))) : 50;
+
+  animateSentiment(finalScore);
+
+  // 更新情緒標籤
+  const label = finalScore >= 75 ? '極度樂觀 🚀' :
+                finalScore >= 60 ? '樂觀 📈' :
+                finalScore >= 45 ? '中性 😐' :
+                finalScore >= 30 ? '謹慎 ⚠️' : '恐慌 😱';
+  const scoreEl = document.getElementById('sentimentScore');
+  const labelEl = document.getElementById('sentimentLabel');
+  if (scoreEl) scoreEl.textContent = finalScore;
+  if (labelEl) labelEl.textContent = label;
+
+  // 更新 mtrend
+  const mtEl  = document.getElementById('mtrend-sentiment');
+  const mtSub = document.getElementById('mtrend-sentiment-sub');
+  if (mtEl)  { mtEl.textContent = label.split(' ')[0]; mtEl.className = `mtrend-value ${finalScore>=60?'up':finalScore<=40?'down':'neutral'}`; }
+  if (mtSub) mtSub.textContent = `情緒指數 ${finalScore}`;
 }
 
 function animateSentiment(score) {
@@ -5294,6 +5504,38 @@ async function fetchDividendDirect(code) {
 
 // ── Yahoo Finance 估值（PE/PB/殖利率等）─────────────────────────
 async function fetchQuoteDirect(code) {
+  // ── A: TWSE BWIBBU_d：PE / PB / 殖利率（台股最準）via allorigins ──
+  let bwibbuResult = {};
+  try {
+    const today = new Date();
+    const dateStr = today.getFullYear()
+      + String(today.getMonth()+1).padStart(2,'0')
+      + String(today.getDate()).padStart(2,'0');
+    const bwUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${dateStr}&selectType=ALL&response=json`;
+    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(bwUrl)}`,
+      { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const j = await r.json();
+      const d = JSON.parse(j.contents || '{}');
+      if (d.stat === 'OK' && d.data) {
+        const row = d.data.find(row => row[0] === code);
+        if (row) {
+          // fields: [代號, 名稱, 本益比, 殖利率(%), 股價淨值比]
+          const pe  = parseFloat(row[2]?.replace(/,/g,'')) || null;
+          const yld = parseFloat(row[3]?.replace(/,/g,'')) || null;
+          const pb  = parseFloat(row[4]?.replace(/,/g,'')) || null;
+          bwibbuResult = {
+            pe:    (pe  > 0 && pe  < 500) ? +pe.toFixed(2)  : null,
+            yield: (yld > 0 && yld < 20)  ? +yld.toFixed(2) : null,
+            pb:    (pb  > 0 && pb  < 30)  ? +pb.toFixed(2)  : null,
+          };
+          console.log('[Quote] BWIBBU_d:', bwibbuResult);
+        }
+      }
+    }
+  } catch(e) { console.warn('[Quote] BWIBBU_d failed:', e.message); }
+
+  // ── B: Yahoo Finance：EPS / ROE / MarketCap / 52w / Beta ──
   const tw     = code + '.TW';
   const fields = 'regularMarketPrice,trailingPE,priceToBook,trailingAnnualDividendRate,trailingAnnualDividendYield,marketCap,trailingEps,returnOnEquity,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,exDividendDate,shortName';
   const url    = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(tw)}&fields=${fields}&formatted=false&lang=en-US`;
@@ -5309,25 +5551,32 @@ async function fetchQuoteDirect(code) {
       const outer = await r.json();
       const raw   = outer.contents ? JSON.parse(outer.contents) : outer;
       const q     = raw?.quoteResponse?.result?.[0];
-      if (!q?.regularMarketPrice) continue;
+      if (!q) continue;
       const yld = q.trailingAnnualDividendYield;
       const pb  = q.priceToBook;
+      console.log('[Quote] Yahoo raw: pe=', q.trailingPE, 'pb=', pb, 'yld=', yld, 'eps=', q.trailingEps, 'roe=', q.returnOnEquity);
+      // 合併：BWIBBU_d 優先（PE/PB/Yield），Yahoo 補其餘
       return {
-        name:        q.shortName || code,
-        pe:          (q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2) : null,
-        pb_yahoo:    (pb > 0 && pb < 20)   ? +pb.toFixed(2)          : null,
-        yield_yahoo: yld != null            ? +(yld * 100).toFixed(2) : null,
-        mktCap:      q.marketCap   || null,
-        eps:         q.trailingEps || null,
-        roe:         q.returnOnEquity != null ? +(q.returnOnEquity * 100).toFixed(1) : null,
-        beta:        q.beta || null,
-        high52w:     q.fiftyTwoWeekHigh || null,
-        low52w:      q.fiftyTwoWeekLow  || null,
-        nextExDiv:   q.exDividendDate
+        name:      q.shortName || code,
+        pe:        bwibbuResult.pe    ?? ((q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2) : null),
+        pb:        bwibbuResult.pb    ?? ((pb > 0 && pb < 20) ? +pb.toFixed(2) : null),
+        yield:     bwibbuResult.yield ?? (yld != null ? +(yld * 100).toFixed(2) : null),
+        mktCap:    q.marketCap   || null,
+        eps:       q.trailingEps != null ? +q.trailingEps.toFixed(2) : null,
+        roe:       q.returnOnEquity != null ? +(q.returnOnEquity * 100).toFixed(1) : null,
+        beta:      q.beta != null ? +q.beta.toFixed(2) : null,
+        high52w:   q.fiftyTwoWeekHigh || null,
+        low52w:    q.fiftyTwoWeekLow  || null,
+        nextExDiv: q.exDividendDate
           ? new Date(q.exDividendDate * 1000).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
           : null,
       };
     } catch(_) {}
+  }
+
+  // Yahoo 全部失敗，只返回 BWIBBU_d 部分
+  if (Object.keys(bwibbuResult).length > 0) {
+    return { name: STOCK_NAMES[code] || code, ...bwibbuResult };
   }
   return {};
 }
@@ -5378,21 +5627,21 @@ async function loadFundamentals(inputCode) {
       console.log('[Fund] FinMind history:', divData.history?.length, 'records');
       console.log('[Fund] Yahoo quote:', quoteData);
 
-      // 組合成與 Worker 相同格式
+      // 組合成與 Worker 相同格式（欄位名稱與 Worker 回傳一致）
       data = {
         quote: {
-          name:       quoteData.name || name,
-          pe:         quoteData.pe   || null,
-          pb_yahoo:   quoteData.pb_yahoo || null,
-          yield_yahoo:quoteData.yield_yahoo || null,
-          mktCap:     quoteData.mktCap || null,
-          eps:        quoteData.eps  || null,
-          roe:        quoteData.roe  || null,
-          beta:       quoteData.beta || null,
-          high52w:    quoteData.high52w || null,
-          low52w:     quoteData.low52w  || null,
-          nextExDiv:  quoteData.nextExDiv || null,
-          src:        'yahoo-direct',
+          name:      quoteData.name      || name,
+          pe:        quoteData.pe        ?? null,
+          pb:        quoteData.pb        ?? null,   // ← pb (not pb_yahoo)
+          yield:     quoteData.yield     ?? null,   // ← yield (not yield_yahoo)
+          mktCap:    quoteData.mktCap    ?? null,
+          eps:       quoteData.eps       ?? null,
+          roe:       quoteData.roe       ?? null,
+          beta:      quoteData.beta      ?? null,
+          high52w:   quoteData.high52w   ?? null,
+          low52w:    quoteData.low52w    ?? null,
+          nextExDiv: quoteData.nextExDiv ?? null,
+          src:       'direct',
         },
         history: divData.history,
         bwibbu:  {},
