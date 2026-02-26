@@ -4,6 +4,10 @@
   台股智析 Taiwan Stock Dashboard
   版本紀錄 (Changelog)
 ==============================================================
+  v13.0 2026-02-26  新聞：移除硬編碼NEWS_DATA，改用Google News RSS(allorigins)
+                    renderNews/filterNews/switchTab全面改用live state.rssNews
+                    基本面：BWIBBU_d改用stockNo單股查詢+corsproxy備援
+                    Yahoo改用v7+v8雙端點×3 proxy，pe/pb/yield/eps/roe正確傳遞
   v12.0 2026-02-26  六大修復：VIX Stooq備援/動態情緒指數/90s盤中刷新
                     基本面PB+Yield+EPS+ROE欄位修正/效能優化/新聞RSS2json直接抓
   v11.0 2026-02-25  配息資料改用 TWSE OpenAPI t187ap45_L（最新年）
@@ -2538,14 +2542,7 @@ const STOCK_STATIC = {
   '2207':{ pe:15.2, yield:3.8, sector:'傳產' },
 };
 
-const NEWS_DATA = [
-  { source:'工商時報', time:'2小時前', title:'台積電3奈米良率持續提升，大客戶訂單滿載', summary:'法人認為台積電先進製程競爭優勢持續擴大，CoWoS封裝需求強勁。', tags:['tw','tech'], stocks:['2330'], impact:'high', positive:true },
-  { source:'Reuters', time:'3小時前', title:'Fed官員暗示今年降息路徑明朗，那斯達克走強', summary:'聯準會官員發表鴿派言論，科技股全面上漲，台股ADR普漲。', tags:['us','macro'], stocks:[], impact:'high', positive:true },
-  { source:'彭博', time:'4小時前', title:'美國擬對特定AI晶片出口進一步管制', summary:'美商務部考慮擴大晶片出口管制，可能影響輝達與台廠合作訂單。需密切觀察政策走向。', tags:['us','tariff','tech'], stocks:['2330','2454'], impact:'medium', positive:false },
-  { source:'經濟日報', time:'5小時前', title:'外資連續買超台股，單日淨買入逾百億', summary:'外資看好台灣科技股後市，集中買進半導體與AI伺服器概念股。', tags:['tw'], stocks:[], impact:'medium', positive:true },
-  { source:'WSJ', time:'6小時前', title:'美中關稅談判傳出進展，台廠轉單效應恐趨緩', summary:'若貿易摩擦降溫，部分轉移至台廠訂單或調整，但長期供應鏈重組趨勢不變。', tags:['us','tariff'], stocks:[], impact:'medium', positive:false },
-  { source:'MoneyDJ', time:'8小時前', title:'廣達AI伺服器出貨量創高，Q1展望樂觀', summary:'AI基礎建設需求持續強勁，台灣ODM廠商受惠，預期本季EPS兩位數增長。', tags:['tw','tech'], stocks:['2382'], impact:'medium', positive:true },
-];
+// NEWS_DATA removed - using live RSS feed (state.rssNews)
 
 // AI_RECS 改為動態，每次點「開始分析」才產生
 let AI_RECS = [];
@@ -2772,84 +2769,129 @@ async function fetchVixFallback() {
   } catch(e) { console.warn('[VIX] Stooq fallback failed:', e.message); }
 }
 
-// RSS 來源設定
+// RSS 來源設定（Google News RSS + 鉅亨網 - 全部有 CORS via allorigins）
 const RSS_SOURCES = [
-  { name: 'cnyes', label: '鉅亨網',
-    url: 'https://feeds.feedburner.com/cnyes/tw-rss' },
-  { name: 'moneydj', label: 'MoneyDJ',
-    url: 'https://www.moneydj.com/KMDJ/RssCenter/RssData.aspx?sid=DJNEWS' },
+  {
+    name: 'tw-stock',
+    label: '台股新聞',
+    url: 'https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+%E8%82%A1%E5%B8%82&hl=zh-TW&gl=TW&ceid=TW%3Azh-Hant',
+  },
+  {
+    name: 'tw-finance',
+    label: '財經新聞',
+    url: 'https://news.google.com/rss/search?q=%E5%8F%B0%E7%81%A3+%E9%87%91%E8%9E%8D+%E7%B6%93%E6%BF%9F&hl=zh-TW&gl=TW&ceid=TW%3Azh-Hant',
+  },
+  {
+    name: 'semiconductor',
+    label: '半導體',
+    url: 'https://news.google.com/rss/search?q=%E5%8F%B0%E7%A9%8D%E9%9B%BB+%E5%8D%8A%E5%B0%8E%E9%AB%94+AI%E6%99%B6%E7%89%87&hl=zh-TW&gl=TW&ceid=TW%3Azh-Hant',
+  },
 ];
 
+// ── 解析 Google News RSS XML ─────────────────────────────────
+function parseGoogleNewsXml(xml, sourceName) {
+  const items = [];
+  const itemBlocks = xml.split('<item>').slice(1);
+  for (const block of itemBlocks) {
+    try {
+      // title
+      const titleM = block.match(/<title>([\s\S]*?)<\/title>/);
+      let title = titleM ? titleM[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim() : '';
+      // Google News title format: "新聞標題 - 媒體來源", split off the source
+      const dashIdx = title.lastIndexOf(' - ');
+      let newsSource = sourceName;
+      if (dashIdx > 10) {
+        newsSource = title.slice(dashIdx + 3).trim();
+        title = title.slice(0, dashIdx).trim();
+      }
+      if (!title) continue;
+      // link (Google News uses <link> directly)
+      const linkM = block.match(/<link>(https?[^<]+)<\/link>/);
+      const link = linkM ? linkM[1].trim() : '';
+      // pubDate
+      const dateM = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+      const pubDate = dateM ? dateM[1].trim() : '';
+      // description / snippet
+      const descM  = block.match(/<description>([\s\S]*?)<\/description>/);
+      let desc = descM ? descM[1].replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').trim() : '';
+      if (desc.length > 150) desc = desc.slice(0, 150) + '…';
+      items.push({ title, link, pubDate, source: newsSource, desc });
+    } catch(_) {}
+  }
+  return items;
+}
+
 async function fetchRSSNews() {
+  // 設置 loading 狀態
+  const loadEl = document.getElementById('newsLoading');
+  if (loadEl) loadEl.style.display = 'flex';
+
   let items = [];
 
-  // ── 路徑 A：Worker RSS（最穩定）──────────────────────────
+  // ── 路徑 A：Worker RSS（最穩定，Worker 端無 CORS 限制）──
   if (WORKER_URL) {
     try {
       const [cnyes, udn] = await Promise.allSettled([
-        fetch(`${WORKER_URL}?type=rss&feed=cnyes`).then(r=>r.json()),
-        fetch(`${WORKER_URL}?type=rss&feed=udn`).then(r=>r.json()),
+        fetch(WORKER_URL + '?type=rss&feed=cnyes').then(r => r.json()),
+        fetch(WORKER_URL + '?type=rss&feed=udn').then(r => r.json()),
       ]);
-      items = [
+      const workerItems = [
         ...(cnyes.value?.items || []),
         ...(udn.value?.items   || []),
       ];
+      if (workerItems.length > 0) {
+        items = workerItems;
+        console.log('[RSS] Worker fetched:', items.length);
+      }
     } catch(e) { console.warn('[RSS] Worker failed:', e.message); }
   }
 
-  // ── 路徑 B：直接 allorigins RSS（無 Worker 時）─────────
+  // ── 路徑 B：直接抓 Google News RSS（allorigins 代理）────
   if (items.length === 0) {
-    const rssJob = async (src) => {
+    console.log('[RSS] Trying Google News RSS direct...');
+    const fetchOneSrc = async (src) => {
       try {
-        // rss2json 免費 API - XML→JSON
-        const encoded = encodeURIComponent(src.url);
-        const apiUrl  = `https://api.rss2json.com/v1/api.json?rss_url=${encoded}&api_key=&count=8`;
-        const r = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
-        if (!r.ok) throw new Error('rss2json HTTP ' + r.status);
-        const j = await r.json();
-        if (j.status !== 'ok') throw new Error('rss2json error: ' + j.message);
-        return (j.items || []).map(i => ({
-          title:   i.title || '',
-          desc:    i.description?.replace(/<[^>]+>/g,'').slice(0,120) || '',
-          link:    i.link  || '',
-          pubDate: i.pubDate || '',
-          source:  src.name,
-        }));
+        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(src.url);
+        const r   = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        if (!r.ok) throw new Error('allorigins HTTP ' + r.status);
+        const j   = await r.json();
+        const xml = j.contents || '';
+        if (!xml.includes('<item>')) throw new Error('no items in RSS');
+        const parsed = parseGoogleNewsXml(xml, src.label);
+        console.log('[RSS]', src.name, '→', parsed.length, 'items');
+        return parsed;
       } catch(e) {
-        // rss2json 失敗 → 試 allorigins raw RSS
-        try {
-          const r2 = await fetch(
-            'https://api.allorigins.win/get?url=' + encodeURIComponent(src.url),
-            { signal: AbortSignal.timeout(8000) }
-          );
-          if (!r2.ok) return [];
-          const j2   = await r2.json();
-          const xml  = j2.contents || '';
-          // Simple XML parsing for <item>
-          const titles = [...xml.matchAll(/<title><!\[CDATA\[(.+?)\]\]><\/title>/g)].slice(1,9);
-          const links  = [...xml.matchAll(/<link>(?!.*rss)(https?[^<]+)<\/link>/g)].slice(0,8);
-          const dates  = [...xml.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)].slice(0,8);
-          return titles.map((t,i) => ({
-            title:   t[1] || '',
-            desc:    '',
-            link:    links[i]?.[1] || '',
-            pubDate: dates[i]?.[1] || '',
-            source:  src.name,
-          })).filter(n => n.title);
-        } catch(_) { return []; }
+        console.warn('[RSS]', src.name, 'failed:', e.message);
+        return [];
       }
     };
 
-    const results = await Promise.allSettled(RSS_SOURCES.map(rssJob));
-    items = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    const results = await Promise.allSettled(RSS_SOURCES.map(fetchOneSrc));
+    const allItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+
+    // 去重（同標題）並按時間排序
+    const seen = new Set();
+    items = allItems
+      .filter(n => { if (seen.has(n.title)) return false; seen.add(n.title); return n.title.length > 5; })
+      .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
+      .slice(0, 20);
+
+    console.log('[RSS] Direct total:', items.length);
   }
 
-  const finalItems = items.slice(0, 15);
-  if (finalItems.length > 0) {
-    renderRealNews(finalItems);
-    console.log('[RSS] Fetched', finalItems.length, 'items');
+  if (items.length > 0) {
+    renderRealNews(items);
   } else {
-    console.warn('[RSS] No items from any source');
+    // 所有來源失敗 - 顯示提示
+    if (loadEl) loadEl.style.display = 'none';
+    const listEl = document.getElementById('newsList');
+    if (listEl && !listEl.innerHTML.trim()) {
+      listEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-dim);">'
+        + '<div style="font-size:24px;margin-bottom:8px;">📡</div>'
+        + '<div>新聞載入失敗</div>'
+        + '<div style="font-size:11px;margin-top:6px;">請點擊「🔄 刷新」重試，或檢查網路連線</div>'
+        + '</div>';
+    }
   }
 }
 
@@ -2940,7 +2982,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 先顯示骨架，讓 UI 立刻出現
   renderWatchlistSkeleton();
-  renderNews();
   renderAiRecs();
   renderMacro();
   renderCalendar();
@@ -3306,6 +3347,10 @@ function switchTab(tab) {
   const pageEl = document.getElementById('page-' + tab);
   if (pageEl) pageEl.classList.add('active');
   // 各頁面初始化
+  if (tab === 'news') {
+    if (state.rssNews.length === 0) fetchRSSNews();
+    else renderNews();
+  }
   if (tab === 'institutional') loadInstitutional();
   if (tab === 'trend') initTrendPage();
   if (tab === 'global') {
@@ -4040,46 +4085,40 @@ ${stockData.map(s => `${s.code} ${s.name}: 現價${s.price} 漲跌${s.changePct>
 // NEWS
 // ============================================================
 function renderNews(filter) {
-  const list = filter && filter !== 'all' ? NEWS_DATA.filter(n => n.tags.includes(filter)) : NEWS_DATA;
-  document.getElementById('newsLoading').style.display = 'none';
-  document.getElementById('newsList').innerHTML = list.map(n => {
-    const impactCls = n.impact === 'high' ? 'tag-red' : n.impact === 'medium' ? 'tag-gold' : 'tag-blue';
-    const impactLabel = n.impact === 'high' ? '高影響' : n.impact === 'medium' ? '中影響' : '低影響';
-    const stockTags = n.stocks.map(code => {
-      const s = state.stockCache[code];
-      const sName = s?.name || STOCK_NAMES[code] || code;
-      return `<span class="tag ${n.positive?'tag-green':'tag-red'}">${sName}${n.positive?'↑':'↓'}</span>`;
-    }).join('');
-    return `<div class="news-item">
-      <div class="news-meta">
-        <span class="news-source">${n.source}</span>
-        <span class="news-time">${n.time}</span>
-        <span class="tag ${impactCls} news-impact">${impactLabel}</span>
-        ${n.positive ? '<span class="tag tag-green">正面</span>' : '<span class="tag tag-red">負面</span>'}
-      </div>
-      <div class="news-title">${n.title}</div>
-      <div class="news-summary">${n.summary}</div>
-      ${stockTags ? `<div class="ai-tags" style="margin-top:8px;">${stockTags}</div>` : ''}
-    </div>`;
-  }).join('');
+  const items = state.rssNews || [];
+  if (items.length === 0) {
+    document.getElementById('newsLoading').style.display = 'flex';
+    document.getElementById('newsList').innerHTML = '';
+    return;
+  }
+  const kwMap = {
+    tw:'台股 台灣 twse', us:'美股 fed 聯準 nasdaq', tech:'科技 半導體 ai 晶片',
+    tariff:'關稅 貿易 出口管制', macro:'總經 gdp 利率 通膨',
+  };
+  const filtered = (filter && filter !== 'all')
+    ? items.filter(n => {
+        const text = (n.title + ' ' + (n.desc||'')).toLowerCase();
+        return (kwMap[filter] || filter).split(' ').some(kw => text.includes(kw.toLowerCase()));
+      })
+    : items;
+  renderRealNews(filtered.length > 0 ? filtered : items);
 }
 
 function filterNews(type, el) {
-  document.querySelectorAll('.filter-bar .filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.filter-bar .filter-chip').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  renderNews(type === 'all' ? null : type);
+  if (state.rssNews.length > 0) {
+    renderNews(type === 'all' ? null : type);
+  } else {
+    fetchRSSNews();
+  }
 }
 
 function refreshNews() {
+  state.rssNews = [];
   document.getElementById('newsLoading').style.display = 'flex';
   document.getElementById('newsList').innerHTML = '';
-  if (WORKER_URL) {
-    fetchRSSNews().then(() => {
-      document.getElementById('newsLoading').style.display = 'none';
-    });
-  } else {
-    setTimeout(() => renderNews(), 800);
-  }
+  fetchRSSNews();
 }
 
 function renderRealNews(items) {
@@ -4135,7 +4174,10 @@ function searchStockNews() {
   const q = document.getElementById('newsStockSearch').value.trim();
   const s = state.stockCache[q];
   const name = s?.name || STOCK_NAMES[q] || q;
-  const related = NEWS_DATA.filter(n => n.stocks.includes(q) || n.title.includes(name));
+  const related = (state.rssNews || []).filter(n =>
+    (n.title && (n.title.includes(name) || n.title.includes(q))) ||
+    (n.desc  && (n.desc.includes(name)  || n.desc.includes(q)))
+  );
   document.getElementById('stockNewsList').innerHTML = related.length ? related.map(n => `
     <div class="news-item">
       <div class="news-meta"><span class="news-source">${n.source}</span><span class="news-time">${n.time}</span></div>
@@ -5504,69 +5546,79 @@ async function fetchDividendDirect(code) {
 
 // ── Yahoo Finance 估值（PE/PB/殖利率等）─────────────────────────
 async function fetchQuoteDirect(code) {
-  // ── A: TWSE BWIBBU_d：PE / PB / 殖利率（台股最準）via allorigins ──
+  // ── A: TWSE BWIBBU_d：PE / PB / 殖利率（台股最準，用股號查單股）──
   let bwibbuResult = {};
   try {
-    const today = new Date();
-    const dateStr = today.getFullYear()
-      + String(today.getMonth()+1).padStart(2,'0')
-      + String(today.getDate()).padStart(2,'0');
-    const bwUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date=${dateStr}&selectType=ALL&response=json`;
-    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(bwUrl)}`,
-      { signal: AbortSignal.timeout(8000) });
-    if (r.ok) {
-      const j = await r.json();
-      const d = JSON.parse(j.contents || '{}');
-      if (d.stat === 'OK' && d.data) {
-        const row = d.data.find(row => row[0] === code);
-        if (row) {
-          // fields: [代號, 名稱, 本益比, 殖利率(%), 股價淨值比]
-          const pe  = parseFloat(row[2]?.replace(/,/g,'')) || null;
-          const yld = parseFloat(row[3]?.replace(/,/g,'')) || null;
-          const pb  = parseFloat(row[4]?.replace(/,/g,'')) || null;
+    // 用 stockNo 查單一股票，不需要全市場資料
+    const bwUrl = 'https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?stockNo='
+      + code + '&response=json';
+    // 試多個 proxy
+    const proxies = [
+      'https://api.allorigins.win/get?url=' + encodeURIComponent(bwUrl),
+      'https://corsproxy.io/?' + encodeURIComponent(bwUrl),
+    ];
+    for (const proxy of proxies) {
+      try {
+        const r = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const raw = j.contents ? JSON.parse(j.contents) : j;
+        if (raw.stat === 'OK' && raw.data?.length > 0) {
+          const row = raw.data[raw.data.length - 1]; // 取最新一筆
+          // BWIBBU_d per-stock fields: [日期, 本益比, 股利殖利率(%), 股價淨值比]
+          const pe  = parseFloat((row[1] || '').replace(/,/g,'')) || null;
+          const yld = parseFloat((row[2] || '').replace(/,/g,'')) || null;
+          const pb  = parseFloat((row[3] || '').replace(/,/g,'')) || null;
           bwibbuResult = {
             pe:    (pe  > 0 && pe  < 500) ? +pe.toFixed(2)  : null,
             yield: (yld > 0 && yld < 20)  ? +yld.toFixed(2) : null,
             pb:    (pb  > 0 && pb  < 30)  ? +pb.toFixed(2)  : null,
           };
-          console.log('[Quote] BWIBBU_d:', bwibbuResult);
+          console.log('[Quote] BWIBBU_d OK:', bwibbuResult, 'via', proxy.split('/')[2]);
+          break;
         }
-      }
+      } catch(_) {}
     }
   } catch(e) { console.warn('[Quote] BWIBBU_d failed:', e.message); }
 
   // ── B: Yahoo Finance：EPS / ROE / MarketCap / 52w / Beta ──
-  const tw     = code + '.TW';
+  const tw = code + '.TW';
   const fields = 'regularMarketPrice,trailingPE,priceToBook,trailingAnnualDividendRate,trailingAnnualDividendYield,marketCap,trailingEps,returnOnEquity,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,exDividendDate,shortName';
-  const url    = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(tw)}&fields=${fields}&formatted=false&lang=en-US`;
+  // Try v7 and v8 endpoints with multiple proxies
+  const yahooEndpoints = [];
+  const v7url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(tw) + '&formatted=false';
+  const v8url = 'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(tw) + '&fields=' + encodeURIComponent(fields) + '&formatted=false&lang=en-US';
+  for (const base of [v7url, v8url]) {
+    yahooEndpoints.push(base);
+    yahooEndpoints.push('https://api.allorigins.win/get?url=' + encodeURIComponent(base));
+    yahooEndpoints.push('https://corsproxy.io/?' + encodeURIComponent(base));
+  }
 
-  for (const endpoint of [
-    url,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  ]) {
+  for (const endpoint of yahooEndpoints) {
     try {
-      const r = await fetch(endpoint, { signal: AbortSignal.timeout(10000) });
+      const r = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) continue;
       const outer = await r.json();
       const raw   = outer.contents ? JSON.parse(outer.contents) : outer;
       const q     = raw?.quoteResponse?.result?.[0];
-      if (!q) continue;
+      if (!q?.regularMarketPrice) continue;
       const yld = q.trailingAnnualDividendYield;
       const pb  = q.priceToBook;
-      console.log('[Quote] Yahoo raw: pe=', q.trailingPE, 'pb=', pb, 'yld=', yld, 'eps=', q.trailingEps, 'roe=', q.returnOnEquity);
-      // 合併：BWIBBU_d 優先（PE/PB/Yield），Yahoo 補其餘
+      console.log('[Quote] Yahoo OK via', endpoint.split('/')[2],
+        '| pe=', q.trailingPE, 'pb=', pb, 'yld=', yld,
+        'eps=', q.trailingEps, 'roe=', q.returnOnEquity, 'mktCap=', q.marketCap);
+      // BWIBBU_d 優先（PE/PB/Yield），Yahoo 補 EPS/ROE/MarketCap
       return {
-        name:      q.shortName || code,
+        name:      q.shortName || STOCK_NAMES[code] || code,
         pe:        bwibbuResult.pe    ?? ((q.trailingPE > 0 && q.trailingPE < 500) ? +q.trailingPE.toFixed(2) : null),
         pb:        bwibbuResult.pb    ?? ((pb > 0 && pb < 20) ? +pb.toFixed(2) : null),
         yield:     bwibbuResult.yield ?? (yld != null ? +(yld * 100).toFixed(2) : null),
         mktCap:    q.marketCap   || null,
-        eps:       q.trailingEps != null ? +q.trailingEps.toFixed(2) : null,
-        roe:       q.returnOnEquity != null ? +(q.returnOnEquity * 100).toFixed(1) : null,
-        beta:      q.beta != null ? +q.beta.toFixed(2) : null,
-        high52w:   q.fiftyTwoWeekHigh || null,
-        low52w:    q.fiftyTwoWeekLow  || null,
+        eps:       q.trailingEps       != null ? +q.trailingEps.toFixed(2)              : null,
+        roe:       q.returnOnEquity    != null ? +(q.returnOnEquity * 100).toFixed(1)   : null,
+        beta:      q.beta              != null ? +q.beta.toFixed(2)                     : null,
+        high52w:   q.fiftyTwoWeekHigh  || null,
+        low52w:    q.fiftyTwoWeekLow   || null,
         nextExDiv: q.exDividendDate
           ? new Date(q.exDividendDate * 1000).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
           : null,
@@ -5574,10 +5626,12 @@ async function fetchQuoteDirect(code) {
     } catch(_) {}
   }
 
-  // Yahoo 全部失敗，只返回 BWIBBU_d 部分
+  // Yahoo 全部失敗：若 BWIBBU_d 有資料就用
   if (Object.keys(bwibbuResult).length > 0) {
+    console.log('[Quote] Yahoo all failed, using BWIBBU_d only');
     return { name: STOCK_NAMES[code] || code, ...bwibbuResult };
   }
+  console.warn('[Quote] All sources failed for', code);
   return {};
 }
 
